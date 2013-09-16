@@ -26,14 +26,24 @@ ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd
 
-all:
-	@echo "Please build each subsystem one at time. Here is a list of subsystems to build:\n$(PROJECTS)\nE.g. \"make all-'subsystemname'\""
+all: $(ALLPROJECTS)
+#@echo "Please build each subsystem one at time. Here is a list of subsystems to build:\n$(PROJECTS)\nE.g. \"make all-'subsystemname'\""
 
 clean: $(CLEANPROJECTS)
 
-install: $(INSTALLPROJECTS)
+install: prepare_vhd $(INSTALLPROJECTS) cleanup_vhd
+
+prepare_vhd:
+	losetup /dev/loop0 ./stewieos.vhd
+	kpartx -v -a /dev/loop0
+	mount /dev/mapper/loop0p1 /mnt
+	
+cleanup_vhd:
+	umount /mnt
+	kpartx -v -d /dev/loop0
+	losetup -d /dev/loop0
 
 $(ALLPROJECTS):
 	$(MAKE) -C $(@:all-%=%) all
