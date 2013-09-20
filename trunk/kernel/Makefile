@@ -1,10 +1,15 @@
 PROJDIRS:=./src
 CFILES:=$(shell find $(PROJDIRS) -type f -name "*.c")
 ASMFILES:=$(shell find $(PROJDIRS) -type f -name "*.s")
+ASMFILES:=$(ASMFILES:./src/start.s=)
 SRCFILES:= $(CFILES) $(ASMFILES)
 OBJFILES:= $(CFILES:.c=.o) $(ASMFILES:.s=.s.o)
 
-CFLAGS:=-nostdlib -nostdinc -std=gnu99 -ggdb
+WARNINGS:=-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
+            -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
+            -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
+            -Wuninitialized -Wconversion -Wstrict-prototypes
+CFLAGS:=-nostdlib -nostdinc -std=gnu99 -ggdb $(WARNINGS)
 LDFLAGS:=-Tstewieos.ld
 
 CC:=i586-pc-codeos-gcc
@@ -15,12 +20,15 @@ KERNEL_VERSION:=0.0.1
 KERNEL_ID:=stewieos
 KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)
 
-.PHONY: all install
+.PHONY: all install clean
 
 all: $(KERNEL_NAME)
 
 install:
 	cp ./$(KERNEL_NAME) /mnt/boot/
+
+clean:
+	rm -f $(OBJFILES)
 
 $(KERNEL_NAME): $(OBJFILES)
 	$(LD) -o $(KERNEL_NAME) $(OBJFILES) $(LDFLAGS)
