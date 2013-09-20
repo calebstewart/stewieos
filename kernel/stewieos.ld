@@ -1,7 +1,9 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-i386)
+STARTUP(./src/start.s.o);
 SECTIONS
 {
+
 	.text 0x100000 :
 	{
 		code = .; _code = .; __code = .;

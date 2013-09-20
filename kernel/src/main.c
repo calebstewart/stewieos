@@ -1,9 +1,12 @@
 #include "kernel.h"
+#include "descriptor_tables.h"
 
-int main(void* multiboot)
+int main( void )
 {
-	//((char*)0xB8000)[0] = ((char*)("A"))[0];
-	//((char*)0xB8000)[1] = 0x0F;
-	printk("Hello, World!\nHere's an integer: %#08X\n", 0xDEADBEAF);
-	return 0xDEADBEAF;
+	printk("Installing new Global Descriptor Table... ");
+	initialize_descriptor_tables();
+	printk("done!\n");
+	
+	
+	return ((int)0xDEADBEAF);
 }

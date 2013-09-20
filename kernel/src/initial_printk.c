@@ -18,7 +18,7 @@
 struct monitor_info
 {
 	int cx, cy; // cursor x and y
-	unsigned char color; // text color (foreground and background)
+	char color; // text color (foreground and background)
 	char* screen; // pointer to the screen buffer
 	int width, height; // width and height of the screen
 };
@@ -37,8 +37,9 @@ static void put_char(char c, int flags, int width, int precision);				// puts a 
 static int put_str(const char* s, int flags, int width, int precision);				// put a string to the the screen
 static int put_int(long int v, int flags, int width, int precision);				// put an integer on the screen
 static int put_uint(unsigned long int v, int flags, int width, int precision, int base);	// put an unsigned integer on the screen
-static void clear_screen();									// clear the screen
-static void update_cursor();									// synchronize the software cursor with the hardware (visual) one.
+static void clear_screen( void );									// clear the screen
+static void update_cursor( void );									// synchronize the software cursor with the hardware (visual) one.
+static void scroll_screen(int count);								// Scroll count lines upwards
 
 /* function: put_int
  * params:
@@ -51,7 +52,7 @@ static int put_int(long int v, int flags, int width, int precision)
 {
 	int count = 0;
 	int digits = 0;
-	int shifter = (v < 0 ? -v : v);
+	long int shifter = (v < 0 ? -v : v);
 	char buffer[33] = {0}; // long int isn't going to have an outrageously big number
 	char* ptr = &buffer[31];
 	buffer[32] = 0;
@@ -67,6 +68,10 @@ static int put_int(long int v, int flags, int width, int precision)
 	count += digits;
 	
 	if( !(flags & P_LEFT) ){
+		while( digits < precision ){
+			put_char('0', 0, 1, 0);
+			count++; digits++;
+		}
 		while( count < width ){
 			put_char((flags & P_PAD0) ? '0' : ' ', 0, 1, 0);
 			count++;
@@ -74,7 +79,7 @@ static int put_int(long int v, int flags, int width, int precision)
 	}
 	
 	do{
-		*--ptr = '0' + (v % 10);
+		*--ptr = (char)('0' + (v % 10));
 		v /= 10;
 	}while(v);
 	
@@ -130,7 +135,7 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 {
 	int count = 0;
 	int digits = 0;
-	int shifter = (v < 0 ? -v : v);
+	unsigned long int shifter = v;
 	char buffer[33] = {0}; // long int isn't going to have an outrageously big number
 	char* ptr = &buffer[31];
 	char letter_base = 'a';
@@ -150,7 +155,7 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 	
 	do{
 		digits++;
-		shifter /= 10;
+		shifter /= ((unsigned long int)base);
 	} while( shifter );
 	
 	count += digits;
@@ -163,6 +168,10 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 	}
 	
 	if( !(flags & P_LEFT) ){
+		while( digits < precision ){
+			put_char('0', 0, 0, 0);
+			digits++; count++;
+		}
 		while( count < width ){
 			put_char((flags & P_PAD0) ? '0' : ' ', 0, 1, 0);
 			count++;
@@ -170,11 +179,11 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 	}
 	
 	do{
-		if( v%base > 9 )
-			*--ptr = letter_base + ((v%base)-10);
+		if( v%((unsigned long int)base) > 9 )
+			*--ptr = (char)(letter_base + (char)((v%((unsigned long int)base))-10));
 		else
-			*--ptr = '0' + (v % base);
-		v /= base;
+			*--ptr = (char)('0' + (char)(v % ((unsigned long int)base)));
+		v /= ((unsigned long int)base);
 	}while(v);
 	
 	put_str(ptr, 0, 0, 0);
@@ -346,6 +355,9 @@ complete:
  */
 static void put_char(char c, int flags, int width, int precision)
 {
+	UNUSED(precision);
+	UNUSED(flags);
+	UNUSED(width);
 	// \r escape character (return to column 0)
 	if( c == '\r' )
 	{
@@ -358,8 +370,8 @@ static void put_char(char c, int flags, int width, int precision)
 		monitor.cy++;
 		monitor.cx = 0;
 		if( monitor.cy == monitor.height ){
-			monitor.cy = 0;
-			clear_screen();
+			monitor.cy--;
+			scroll_screen(1);
 		} // end monitor.cy == monitor.height
 	} // end c == '\n'
 	
@@ -389,8 +401,8 @@ static void put_char(char c, int flags, int width, int precision)
 		monitor.cx = 0;
 		monitor.cy++;
 		if( monitor.cy == monitor.height ){
-			clear_screen();
-			monitor.cy = 0;
+			monitor.cy--;
+			scroll_screen(1);
 		}
 	} // end monitor.cx == monitor.width
 	
@@ -402,7 +414,7 @@ static void put_char(char c, int flags, int width, int precision)
  * purpose:
  * 	clears the entire screen to the current attributes
  */
-static void clear_screen()
+static void clear_screen( void )
 {
 	for(int x = 0; x < monitor.width; ++x){
 		for(int y = 0; y < monitor.height; ++y){
@@ -412,15 +424,33 @@ static void clear_screen()
 	}
 } // end clear_screen
 
+/* function: scroll_screen
+ * params:
+ * 	count -- the number of lines to scroll
+ * purpose:
+ * 	scroll the page upwards by count lines
+ */
+static void scroll_screen(int count)
+{
+	for(int ln = 0; ln < monitor.height-count; ++ln)
+	{
+		memcpy(&monitor.screen[ln*monitor.height*2], &monitor.screen[(ln+1)*monitor.height*2], (size_t)(monitor.width*2));
+	}
+	for(int ln = monitor.height-count; ln < monitor.height; ++ln)
+	{
+		for(int i = 0; i < monitor.width; ++i) put_char(' ', 0, 0, 0);
+	}
+}
+
 /* function: update_cursor
  * params:
  * 	none
  * purpose:
  * 	updates the hardware (visible) cursor to the current software position
  */
-static void update_cursor()
+static void update_cursor( void )
 {
-	unsigned short idx = monitor.cy * monitor.width + monitor.cx; // grab the index ofthe cursor position
+	unsigned short idx = (unsigned short)(monitor.cy * monitor.width + monitor.cx); // grab the index ofthe cursor position
 	outb(0x3D4, 0x0E);
 	outb(0x3D5, (unsigned char)(idx >> 8)); // send the lower 8 bits
 	outb(0x3D4, 0x0F);
