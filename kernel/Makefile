@@ -1,7 +1,6 @@
 PROJDIRS:=./src
 CFILES:=$(shell find $(PROJDIRS) -type f -name "*.c")
 ASMFILES:=$(shell find $(PROJDIRS) -type f -name "*.s")
-ASMFILES:=$(ASMFILES:./src/start.s=)
 SRCFILES:= $(CFILES) $(ASMFILES)
 OBJFILES:= $(CFILES:.c=.o) $(ASMFILES:.s=.s.o)
 
@@ -31,7 +30,7 @@ clean:
 	rm -f $(OBJFILES)
 
 $(KERNEL_NAME): $(OBJFILES)
-	$(LD) -o $(KERNEL_NAME) $(OBJFILES) $(LDFLAGS)
+	$(LD) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(LDFLAGS)
 
 %.s.o: %.s
 	$(ASM) -felf $(@:.s.o=.s) -o $@
