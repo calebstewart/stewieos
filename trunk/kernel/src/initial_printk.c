@@ -30,6 +30,11 @@ static struct monitor_info monitor = {
 	(char*)0xB8000,			// Pointer to the video memory
 	80, 25				// width and height of the buffer
 };
+static char output_level_colors[3] = {
+	0x0F,				// Default output level (0), White on black
+	0x01,				// Output level 2, Blue on black
+	0x04,				// Output level 3, Red on black
+};
 
 int(*printk)(const char*,...) = initial_printk;
 
@@ -208,6 +213,7 @@ int initial_printk(const char* format, ...)
 	int precision = 0;
 	char length = 0;
 	char specifier = 0;
+	char original_color = monitor.color;
 	__builtin_va_list ap;
 	__builtin_va_start(ap, format);
 	
@@ -331,8 +337,13 @@ int initial_printk(const char* format, ...)
 				} else if( length == 'L' ){
 					//count += put_double(__builtin_va_arg(ap, long double), flags, width, precision);
 				}
-			} // end if specifier == double
-			
+			} else if( specifier == 'V' ){ // end if specifier == double
+				// Change the output level
+				if( width < 0 || width >= 3 ){ // output level out of range, default to 0
+					width = 0;
+				}
+				monitor.color = output_level_colors[width];
+			}
 			
 			
 		} else { // end format == '%'
@@ -342,6 +353,8 @@ int initial_printk(const char* format, ...)
 		} // end format != '%'
 	}
 complete:
+	// Reset the text color, and update the hardware cursor
+	monitor.color = original_color;
 	update_cursor();
 	return count;
 }

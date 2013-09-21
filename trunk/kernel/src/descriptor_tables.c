@@ -3,7 +3,9 @@
 
 // Function Prototypes
 extern void flush_gdt(void* addr); // assembly function to present the new gdt to the system
+extern void flush_idt(void* addr); // assembly function to present the new idt to the system
 static void gdt_set_gate(int n, u32 base, u32 limit, u8 access, u8 granularity); // set a gdt entry
+static void idt_set_gate(uint n, void(*base)(void), u16 selector, u8 flags); // set an idt entry
 static int initialize_gdt(void);
 static int initialize_idt(void);
 
@@ -24,6 +26,7 @@ int initialize_descriptor_tables()
 {
 	initialize_gdt();
 	initialize_idt();
+	asm volatile ("int $0xF");
 	return 0;
 }
 
@@ -60,7 +63,7 @@ static int initialize_idt( void )
 	idt_ptr.limit = sizeof(struct idt_entry)*256 - 1;
 	idt_ptr.base = (u32)&idt_table;
 	
-/*	idt_set_gate(0, isr0, 0x08, 0x8E);
+	idt_set_gate(0, isr0, 0x08, 0x8E);
 	idt_set_gate(1, isr1, 0x08, 0x8E);
 	idt_set_gate(2, isr2, 0x08, 0x8E);
 	idt_set_gate(3, isr3, 0x08, 0x8E);
@@ -91,17 +94,25 @@ static int initialize_idt( void )
 	idt_set_gate(28, isr28, 0x08, 0x8E);
 	idt_set_gate(29, isr29, 0x08, 0x8E);
 	idt_set_gate(30, isr30, 0x08, 0x8E);
-	idt_set_gate(31, isr31, 0x08, 0x8E);*/
+	idt_set_gate(31, isr31, 0x08, 0x8E);
+
+	flush_idt((void*)&idt_ptr);
 
 	return 0;
 }
 
-static void idt_set_gate(uint n, u32 base, u16 sel, u8 flags)
+static void idt_set_gate(uint n, void(*base)(void), u16 sel, u8 flags)
 {
 	if( n >= 256 ) return;
-	idt_table[n].base_low = (base & 0xFFFF);
-	idt_table[n].base_high = (u16)((base >> 16) & 0xFFFF);
+	idt_table[n].base_low = (((u32)base) & 0xFFFF);
+	idt_table[n].base_high = (u16)((((u32)base) >> 16) & 0xFFFF);
 	idt_table[n].flags = flags;
 	idt_table[n].selector = sel;
 	idt_table[n].always0 = 0;
+}
+
+void isr_handler(struct regs regs)
+{
+	printk("%2VCAUGHT INTERRUPT SERVICE ROUTINE!\n");
+	
 }
