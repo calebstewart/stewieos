@@ -456,12 +456,16 @@ static void scroll_screen(int count)
 {
 	for(int ln = 0; ln < monitor.height-count; ++ln)
 	{
-		memcpy(&monitor.screen[ln*monitor.height*2], &monitor.screen[(ln+1)*monitor.height*2], (size_t)(monitor.width*2));
+		memcpy(&monitor.screen[ln*monitor.width*2], &monitor.screen[(ln+1)*monitor.width*2], (size_t)(monitor.width*2));
 	}
-	for(int ln = monitor.height-count; ln < monitor.height; ++ln)
-	{
-		for(int i = 0; i < monitor.width; ++i) put_char(' ', 0, 0, 0);
-	}
+ 	for(int ln = monitor.height-count; ln < monitor.height; ++ln)
+ 	{
+		for(int i = 0; i < monitor.width; ++i){
+			monitor.screen[(i+(ln*monitor.width))*2] = 0;
+			monitor.screen[1+(i+(ln*monitor.width))*2] = 0;
+		}
+ 		//memset(&monitor.screen[ln*monitor.width*2], 0, (size_t)(monitor.width*2));
+ 	}
 }
 
 /* function: update_cursor
