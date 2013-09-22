@@ -31,7 +31,6 @@ int initialize_descriptor_tables()
 	printk("installing interrupt descriptor table... ");
 	initialize_idt();
 	printk("done.\n");
-	asm volatile ("int $0xF");
 	return 0;
 }
 
@@ -114,25 +113,25 @@ static int initialize_idt( void )
 	outb(0x21, 0x0);
 	outb(0xA1, 0x0);
 	
-	idt_set_gate(32, irq0, 0x08, 0x80);
-	idt_set_gate(33, irq1, 0x08, 0x80);
-	idt_set_gate(34, irq2, 0x08, 0x80);
-	idt_set_gate(35, irq3, 0x08, 0x80);
-	idt_set_gate(36, irq4, 0x08, 0x80);
-	idt_set_gate(37, irq5, 0x08, 0x80);
-	idt_set_gate(38, irq6, 0x08, 0x80);
-	idt_set_gate(39, irq7, 0x08, 0x80);
-	idt_set_gate(40, irq8, 0x08, 0x80);
-	idt_set_gate(41, irq9, 0x08, 0x80);
-	idt_set_gate(42, irq10, 0x08, 0x80);
-	idt_set_gate(43, irq11, 0x08, 0x80);
-	idt_set_gate(44, irq12, 0x08, 0x80);
-	idt_set_gate(45, irq13, 0x08, 0x80);
-	idt_set_gate(46, irq14, 0x08, 0x80);
-	idt_set_gate(47, irq15, 0x08, 0x80);
+	idt_set_gate(32, irq0, 0x08, 0x8E);
+	idt_set_gate(33, irq1, 0x08, 0x8E);
+	idt_set_gate(34, irq2, 0x08, 0x8E);
+	idt_set_gate(35, irq3, 0x08, 0x8E);
+	idt_set_gate(36, irq4, 0x08, 0x8E);
+	idt_set_gate(37, irq5, 0x08, 0x8E);
+	idt_set_gate(38, irq6, 0x08, 0x8E);
+	idt_set_gate(39, irq7, 0x08, 0x8E);
+	idt_set_gate(40, irq8, 0x08, 0x8E);
+	idt_set_gate(41, irq9, 0x08, 0x8E);
+	idt_set_gate(42, irq10, 0x08, 0x8E);
+	idt_set_gate(43, irq11, 0x08, 0x8E);
+	idt_set_gate(44, irq12, 0x08, 0x8E);
+	idt_set_gate(45, irq13, 0x08, 0x8E);
+	idt_set_gate(46, irq14, 0x08, 0x8E);
+	idt_set_gate(47, irq15, 0x08, 0x8E);
 
 	flush_idt((void*)&idt_ptr);
-
+	
 	return 0;
 }
 
@@ -148,8 +147,12 @@ static void idt_set_gate(uint n, void(*base)(void), u16 sel, u8 flags)
 
 void isr_handler(struct regs regs)
 {
-	printk("%2VCAUGHT INTERRUPT SERVICE ROUTINE!\n");
+	printk("%2V\nUnhandled exception: 0x%X\n", regs.intno);
+	printk("%2VError Code: 0x%X\n", regs.err);
+	printk("%2VEIP: 0x%X\n", regs.eip);
+	//printk("%2VCAUGHT INTERRUPT SERVICE ROUTINE!\n");
 	
+	while(1);
 }
 
 void irq_handler(struct regs regs)
@@ -158,16 +161,15 @@ void irq_handler(struct regs regs)
 	if( regs.intno >= 40 )
 	{
 		// Send the reset signal to the second PIC
-		outb(0xA, 0x20);
+		outb(0xA0, 0x20);
 	}
 	// Send the reset signal to the first PIC
 	outb(0x20, 0x20);
-	
+
 	if( isr_callback[regs.intno] != 0 ){
 		isr_callback[regs.intno](&regs);
 	}
-	
-	printk("%V1CUAGHT INTERRUPT REQUEST %#X!\n", regs.intno-32);
+
 }
 
 void register_interrupt(u8 n, isr_callback_t callback)

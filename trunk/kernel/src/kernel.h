@@ -2,6 +2,7 @@
 #define _KERNEL_H_
 
 #define UNUSED(var) do{ (void)var; } while(0)
+#define NULL		((void*)0)
 
 /* Vendor-strings. */
 #define CPUID_VENDOR_OLDAMD       "AMDisbetter!" //early engineering samples of AMD K5 processor
@@ -121,5 +122,8 @@ size_t memcpy(void* dst, void* src, size_t count);
 
 void cpuid(int code, u32* a, u32* d);
 u32 cpuid_string(int code, char* str);
+
+u32 disablei( void );
+void restore(u32 eflags);
 
 #endif

@@ -64,6 +64,7 @@ static int put_int(long int v, int flags, int width, int precision)
 	if( (v >= 0 && ((flags & P_SIGN) || (flags & P_SPACE))) || v < 0 ){
 		count++;
 	}
+	long int posv = v > 0 ? v : -v;
 	
 	do{
 		digits++;
@@ -84,9 +85,17 @@ static int put_int(long int v, int flags, int width, int precision)
 	}
 	
 	do{
-		*--ptr = (char)('0' + (v % 10));
-		v /= 10;
-	}while(v);
+		*--ptr = (char)('0' + (posv % 10));
+		posv /= 10;
+	}while(posv);
+	
+	if( v >= 0 && (flags & P_SIGN) ){
+		put_char('+', 0, 0, 0);
+	} else if( v >= 0 && flags & P_SPACE ){
+		put_char(' ', 0, 0, 0);
+	} else if( v < 0 ){
+		put_char('-', 0, 0, 0);
+	}
 	
 	put_str(ptr, 0, 0, 0);
 	
