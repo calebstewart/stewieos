@@ -1,6 +1,6 @@
 #include "kernel.h"
 
-size_t memset(void* ptr, size_t count, int v)
+size_t memset(void* ptr, int v, size_t count)
 {
 	size_t tmp = count;
 	while(count--){

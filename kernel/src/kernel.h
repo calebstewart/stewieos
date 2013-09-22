@@ -117,7 +117,7 @@ void outb(unsigned short port, unsigned char v);
 unsigned char inb(unsigned short port);
 unsigned short inw(unsigned short port);
 
-size_t memset(void* ptr, size_t count, int v);
+size_t memset(void* ptr, int v, size_t count);
 size_t memcpy(void* dst, void* src, size_t count);
 
 void cpuid(int code, u32* a, u32* d);
