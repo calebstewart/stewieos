@@ -64,6 +64,9 @@ struct regs
 	u32 eip, cs,eflags, useresp, ss; // Pushed by the processor
 };
 
+// Defines the prototype for interrupt routine callbacks
+typedef void (*isr_callback_t)(struct regs* regs);
+
 
 int initialize_descriptor_tables( void );
 
@@ -101,7 +104,28 @@ void isr30( void );
 void isr31( void );
 void isr32( void );
 
+void irq0( void );
+void irq1( void );
+void irq2( void );
+void irq3( void );
+void irq4( void );
+void irq5( void );
+void irq6( void );
+void irq7( void );
+void irq8( void );
+void irq9( void );
+void irq10( void );
+void irq11( void );
+void irq12( void );
+void irq13( void );
+void irq14( void );
+void irq15( void );
+
 void isr_handler(struct regs regs);
+void irq_handler(struct regs regs);
+
+// register a function as the interrupt handler
+void register_interrupt(u8 n, isr_callback_t callback);
 
 
 #endif
