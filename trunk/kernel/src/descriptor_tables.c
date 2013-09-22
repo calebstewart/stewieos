@@ -147,6 +147,10 @@ static void idt_set_gate(uint n, void(*base)(void), u16 sel, u8 flags)
 
 void isr_handler(struct regs regs)
 {
+	if( isr_callback[regs.intno] ){
+		isr_callback[regs.intno](&regs);
+		return;
+	}
 	printk("%2V\nUnhandled exception: 0x%X\n", regs.intno);
 	printk("%2VError Code: 0x%X\n", regs.err);
 	printk("%2VEIP: 0x%X\n", regs.eip);
