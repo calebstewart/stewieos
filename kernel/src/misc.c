@@ -2,12 +2,8 @@
 
 size_t memset(void* ptr, int v, size_t count)
 {
-	size_t tmp = count;
-	while(count--){
-		*((char*)ptr) = (char)v;
-		ptr = (void*)( (char*)ptr + 1 );
-	}
-	return tmp;
+	for(size_t i = 0; i < count; ++i) ((char*)ptr)[i] = (char)v;
+	return count;
 }
 
 size_t memcpy(void* d, void* s, size_t c)

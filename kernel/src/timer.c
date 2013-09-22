@@ -77,8 +77,6 @@ void init_timer(unsigned int freq)
 	
 	u32 divisor = ((u32)(1193180 / freq));
 	
-	printk("mark 1\n");
-	
 	asm volatile("cli");
 	
 	// PIT command byte
@@ -86,8 +84,6 @@ void init_timer(unsigned int freq)
 	// Get the high and low bytes of the divisor
 	u8 low = (u8)( divisor & 0xFF );
 	u8 high = (u8)( (divisor >> 8) & 0xFF );
-	
-	printk("mark 2\n");
 	
 	outb(0x40, low);
 	outb(0x40, high);
