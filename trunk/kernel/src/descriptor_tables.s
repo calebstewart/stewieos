@@ -98,6 +98,75 @@ ISR_NOERR	30
 ISR_NOERR	31
 ISR_NOERR	32
 
+; This makes it easier to define the irq functions
+; it simply pushes the interrupt number and calls the
+; stub
+%macro IRQ 2
+[global irq%1]
+irq%1:
+	cli
+	push byte 0
+	push byte %2
+	jmp irq_stub
+%endmacro
+
+IRQ 0,32
+IRQ 1,33
+IRQ 2,34
+IRQ 3,35
+IRQ 4,36
+IRQ 5,37
+IRQ 6,38
+IRQ 7,39
+IRQ 8,40
+IRQ 9,41
+IRQ 10,42
+IRQ 11,43
+IRQ 12,44
+IRQ 13,45
+IRQ 14,46
+IRQ 15,47
+
+;
+; Function: irq_stub
+; Parameters:
+;	int error -- The error code pushed by some ISRs (0 here)
+;	int interrupt_no -- the interrupt number of this IRQ (IRQNO+32)
+; Purpose:
+;	Save registers, and switch to kernel segments to call the C IRQ handler
+;
+[global irq_stub]
+[extern irq_handler]	; This is the C handler for interrupt service routines
+irq_stub:
+	pusha		; Push all common registers
+	
+	mov ax,ds	; we save the data segment through eax
+	push eax
+	
+	; Load kernel segment selectors
+	mov ax,0x10
+	mov ds,ax
+	mov es,ax
+	mov fs,ax
+	mov gs,ax
+	
+	call irq_handler
+	
+	; Restore old segment selectors
+	pop eax
+	mov ds,ax
+	mov es,ax
+	mov fs,ax
+	mov gs,ax
+	
+	; Restore common registers
+	popa
+	; Remove ISR # and error code from the stack
+	add esp,8
+	; Re-enable interrupts
+	sti
+	iret		; Pops CS, EIP, EFLGS, SS, ESP
+
 ;
 ; Function: isr_stub
 ; Parameters: None
