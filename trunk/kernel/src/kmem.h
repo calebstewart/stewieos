@@ -14,10 +14,10 @@
  * 	The function is set to placement_* versions where the new
  * 	data is simply appended to the kernel data area
  */
-extern void* (*kmalloc)(size_t);
-extern void* (*kmalloc_a)(size_t);
-extern void* (*kmalloc_p)(size_t, u32*);
-extern void* (*kmalloc_ap)(size_t, u32*);
+void* kmalloc(size_t size);
+void* kmalloc_a(size_t size);
+void* kmalloc_p(size_t size, u32* phys);
+void* kmalloc_ap(size_t size, u32* phys);
 
 /* Function: kfree
  * Parameters:

@@ -1,6 +1,8 @@
 #ifndef _KERNEL_H_
 #define _KERNEL_H_
 
+#define STEWIEOS_USER_BASE 0x80000000
+
 #define UNUSED(var) do{ (void)var; } while(0)
 #define NULL		((void*)0)
 
