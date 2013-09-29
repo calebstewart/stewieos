@@ -31,6 +31,7 @@ void release_frame(u32 idx)
 
 void alloc_frame(page_t* page, int user, int rw)
 {
+	//printk("PHYSICAL_ADDRESS: %p\n", physical_frame);
 	if( page->frame != 0 ){
 		return;
 	}
@@ -46,6 +47,14 @@ void alloc_frame(page_t* page, int user, int rw)
 	page->rw = rw ? 1 : 0;
 	page->frame = idx;
 	return;
+}
+
+void clone_frame(page_t* dst, page_t* src)
+{
+	dst->present = 1;
+	dst->user = src->user;
+	dst->rw = src->rw;
+	dst->frame = src->frame;
 }
 
 void free_frame(page_t* page) 

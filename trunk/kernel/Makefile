@@ -8,11 +8,11 @@ WARNINGS:=-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes
-CFLAGS:=-nostdlib -nostdinc -std=gnu99 -ggdb $(WARNINGS)
-LDFLAGS:=-Tstewieos.ld
+CFLAGS:=-nostdlib -std=gnu99 -gdwarf-2 -g3 $(WARNINGS)
+LDFLAGS:=-Tstewieos.ld -lgcc
 
 CC:=i586-pc-codeos-gcc
-LD:=i586-pc-codeos-ld
+LD:=i586-pc-codeos-gcc
 ASM:=nasm
 
 KERNEL_VERSION:=0.0.1
@@ -33,4 +33,4 @@ $(KERNEL_NAME): $(OBJFILES)
 	$(LD) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(LDFLAGS)
 
 %.s.o: %.s
-	$(ASM) -felf $(@:.s.o=.s) -o $@
+	$(ASM) -f elf32 -g $(@:.s.o=.s) -o $@
