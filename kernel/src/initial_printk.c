@@ -27,7 +27,7 @@ struct monitor_info
 static struct monitor_info monitor = {
 	0, 0,				// cursor initially at 0,0
 	0x0F,				// Text color (initial: White on Black) 
-	(char*)0xB8000,			// Pointer to the video memory
+	(char*)0xC00B8000,		// Pointer to the video memory
 	80, 25				// width and height of the buffer
 };
 static char output_level_colors[3] = {

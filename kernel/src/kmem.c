@@ -34,7 +34,7 @@ void* placement_kmalloc(size_t size, u32* phys, int align)
 		placement_address = (placement_address & 0xFFFFF000) + 0x1000;
 	}
 	if( phys ){
-		*phys = placement_address;
+		*phys = placement_address - KERNEL_VIRTUAL_BASE;
 	}
 	void* ret = (void*)placement_address;
 	placement_address += size;

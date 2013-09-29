@@ -24,6 +24,7 @@ int main( void )
 	
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
 	
+	
 	printk("Registering timer callback for the next second... ");
 	int result = timer_callback(timer_get_ticks()+timer_get_freq(), my_timer_callback);
 	printk("done (result=%d)\n", result);

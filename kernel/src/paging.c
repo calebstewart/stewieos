@@ -8,6 +8,8 @@ extern u32* physical_frame;
 extern u32 physical_frame_count;
 extern u32 placement_address;
 
+void initial_switch_dir(void* cr3);
+
 void init_paging( void )
 {
 	// 32MB of memory for now... we will fix it later
@@ -20,17 +22,23 @@ void init_paging( void )
 	kerndir = (page_dir_t*)kmalloc_a(sizeof(page_dir_t));
 	memset(kerndir, 0, sizeof(page_dir_t));
 	curdir = kerndir;
+	curdir->phys = (u32)( &curdir->tablePhys[0] ) - KERNEL_VIRTUAL_BASE;
 	
-	u32 i = 0;
+	u32 i = KERNEL_VIRTUAL_BASE;
 	while( i < placement_address )
 	{
+		// get a new frame and map it
 		alloc_frame(get_page((void*)i, 1, kerndir), 1, 0);
+		// identity map the same frame
+		clone_frame(get_page((void*)(i - KERNEL_VIRTUAL_BASE), 1, kerndir), get_page((void*)i, 1, kerndir));
 		i+=0x1000;
 	}
 	
 	register_interrupt(0xE, page_fault);
 	
-	switch_page_dir(curdir);
+	//switch_page_dir(curdir);
+	
+	initial_switch_dir((void*)curdir->phys);
 }
 
 page_t* get_page(void* vpaddress, int make, page_dir_t* dir)
@@ -55,7 +63,7 @@ page_t* get_page(void* vpaddress, int make, page_dir_t* dir)
 void switch_page_dir(page_dir_t* dir)
 {
 	curdir = dir;
-	asm volatile("mov %0,%%cr3" :: "r"(&dir->tablePhys));
+	asm volatile("mov %0,%%cr3" :: "r"(curdir->phys));
 	u32 cr0;
 	asm volatile("mov %%cr0,%0" :"=r"(cr0));
 	cr0 |= 0x80000000;
@@ -73,6 +81,6 @@ void page_fault(struct regs* regs)
 	int reserved = regs->err & 0x8;
 	//int id = regs->err & 0x10;
 	
-	printk("%2VPAGE FAULT ( %s%s%s%s)\n", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"");
+	printk("%2VPAGE FAULT ( %s%s%s%s)\n\tAddress: %p", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
 	while(1);
 }

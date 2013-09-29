@@ -5,6 +5,7 @@
 
 #define UNUSED(var) do{ (void)var; } while(0)
 #define NULL		((void*)0)
+#define KERNEL_VIRTUAL_BASE 0xC0000000
 
 /* Vendor-strings. */
 #define CPUID_VENDOR_OLDAMD       "AMDisbetter!" //early engineering samples of AMD K5 processor
