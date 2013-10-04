@@ -42,8 +42,8 @@ static void put_char(char c, int flags, int width, int precision);				// puts a 
 static int put_str(const char* s, int flags, int width, int precision);				// put a string to the the screen
 static int put_int(long int v, int flags, int width, int precision);				// put an integer on the screen
 static int put_uint(unsigned long int v, int flags, int width, int precision, int base);	// put an unsigned integer on the screen
-static void clear_screen( void );									// clear the screen
-static void update_cursor( void );									// synchronize the software cursor with the hardware (visual) one.
+void clear_screen( void );									// clear the screen
+static void update_cursor( void );								// synchronize the software cursor with the hardware (visual) one.
 static void scroll_screen(int count);								// Scroll count lines upwards
 
 /* function: put_int
@@ -436,7 +436,7 @@ static void put_char(char c, int flags, int width, int precision)
  * purpose:
  * 	clears the entire screen to the current attributes
  */
-static void clear_screen( void )
+void clear_screen( void )
 {
 	for(int x = 0; x < monitor.width; ++x){
 		for(int y = 0; y < monitor.height; ++y){

@@ -29,6 +29,8 @@ typedef struct page_dir
 	u32 phys;
 } page_dir_t;
 
+extern page_dir_t* kerndir;
+
 void init_paging( void );
 
 void switch_page_dir(page_dir_t* dir);

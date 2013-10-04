@@ -45,7 +45,7 @@ void alloc_frame(page_t* page, int user, int rw)
 	page->present = 1;
 	page->user = user ? 1 : 0;
 	page->rw = rw ? 1 : 0;
-	page->frame = idx;
+	page->frame = (idx & 0x000FFFFF);
 	return;
 }
 
