@@ -26,7 +26,7 @@ ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd
 
 all: $(ALLPROJECTS)
 #@echo "Please build each subsystem one at time. Here is a list of subsystems to build:\n$(PROJECTS)\nE.g. \"make all-'subsystemname'\""
@@ -42,6 +42,11 @@ prepare_vhd:
 	
 cleanup_vhd:
 	umount /mnt
+	kpartx -v -d /dev/loop0
+	losetup -d /dev/loop0
+
+#Sometimes cleanup_vhd fails, so we need this to make the fix a little easier
+fix_vhd:
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0
 

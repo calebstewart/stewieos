@@ -23,6 +23,11 @@ void init_paging( void )
 	memset(kerndir, 0, sizeof(page_dir_t));
 	curdir = kerndir;
 	curdir->phys = (u32)( &curdir->tablePhys[0] ) - KERNEL_VIRTUAL_BASE;
+
+	// allocate the initial page tables for the kernel heap
+	for( u32 a = 0xE0000000; a < 0xE0010000; a += 0x1000 ){
+		get_page((void*)a, 1, kerndir);
+	}
 	
 	u32 i = KERNEL_VIRTUAL_BASE;
 	while( i < placement_address )
@@ -34,11 +39,19 @@ void init_paging( void )
 		i+=0x1000;
 	}
 	
+	// allocate the initial frames for the kernel heap
+	for( u32 a = 0xE0000000; a < 0xE0010000; a += 0x1000 ){
+		page_t* page = get_page((void*)a, 0, kerndir);
+		alloc_frame(page, 0, 1);
+	}
+	
 	register_interrupt(0xE, page_fault);
 	
 	//switch_page_dir(curdir);
 	
 	initial_switch_dir((void*)curdir->phys);
+	
+	init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
 }
 
 page_t* get_page(void* vpaddress, int make, page_dir_t* dir)

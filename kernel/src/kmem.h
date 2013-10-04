@@ -31,4 +31,6 @@ void* kmalloc_ap(size_t size, u32* phys);
  */
 void kfree(void* data);
 
+void init_kheap(u32, u32, u32);
+
 #endif /* ifndef _KMEM_H_ */

@@ -12,7 +12,6 @@ struct callback_info
 
 static unsigned int timer_freq = 0;						// The current timer frequency
 static tick_t current_tick = 0;							// The current time (tick count since init)
-static tick_t next_callback_tick = 0;						// The time of the next callbackt to be called
 static struct callback_info callbacks[TIMER_MAX_CALLBACKS];			// The list of callback structures to be inserted (empty=>when==TIMER_CANCEL)
 static struct callback_info* next_callback = (struct callback_info*)0;		// The next callbacks info structure
 
@@ -80,7 +79,7 @@ void init_timer(unsigned int freq)
 	asm volatile("cli");
 	
 	// PIT command byte
-	outb(0x43, 0b00110110);
+	outb(0x43, 0x36); // 0b00110110
 	// Get the high and low bytes of the divisor
 	u8 low = (u8)( divisor & 0xFF );
 	u8 high = (u8)( (divisor >> 8) & 0xFF );
