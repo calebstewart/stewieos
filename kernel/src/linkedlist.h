@@ -20,17 +20,17 @@ struct list
 #define list_for_each(item, head) for( item = (head)->next; item != head; item = (item)->next )
 
 // Is this an empty list?
-static int list_empty(list_t* list)
+static inline int list_empty(list_t* list)
 {
 	return (list->next == list);
 }
 // is this inside of another list?
-static int list_inserted(list_t* list)
+static inline int list_inserted(list_t* list)
 {
 	return (list->next != list || list->prev != list);
 }
 
-static void _list_add(list_t* what, list_t* prev, list_t* next)
+static inline void _list_add(list_t* what, list_t* prev, list_t* next)
 {
 	prev->next = what;
 	next->prev = what;
@@ -38,23 +38,23 @@ static void _list_add(list_t* what, list_t* prev, list_t* next)
 	what->next = next;
 }
 
-static void list_add(list_t* what, list_t* where)
+static inline void list_add(list_t* what, list_t* where)
 {
 	_list_add(what, where, where->next);
 }
 
-static void list_add_before(list_t* what, list_t* where)
+static inline void list_add_before(list_t* what, list_t* where)
 {
 	_list_add(what, where->prev, where);
 }
 
-static void _list_rem(list_t* prev, list_t* next)
+static inline void _list_rem(list_t* prev, list_t* next)
 {
 	prev->next = next;
 	next->prev = prev;
 }
 
-static void list_rem(list_t* what)
+static inline void list_rem(list_t* what)
 {
 	_list_rem(what->prev, what->next);
 	INIT_LIST(what);
