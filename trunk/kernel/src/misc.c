@@ -21,7 +21,6 @@ void cpuid(int code, u32* a, u32* d)
 {
 	asm volatile("cpuid":"=a"(*a),"=d"(*d):"a"((u32)code):"ecx","ebx");
 }
-
 u32 cpuid_string(int code, char* s)
 {
 	u32 max_code = 0;

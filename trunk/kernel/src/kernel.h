@@ -1,10 +1,13 @@
 #ifndef _KERNEL_H_
 #define _KERNEL_H_
 
+#include <sys/types.h>
+
+#define MAXNAMELEN		256			/* the maximum length of a name string in the file system */
+
 #define STEWIEOS_USER_BASE 0x80000000
 
 #define UNUSED(var) do{ (void)var; } while(0)
-#define NULL		((void*)0)
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 
 /* Vendor-strings. */
@@ -110,7 +113,6 @@ typedef signed short	s16;
 typedef unsigned int	u32;
 typedef signed int	s32;
 typedef unsigned int	uint;
-typedef unsigned int	size_t;
 
 extern int (*printk)(const char* format, ...);
 
@@ -128,5 +130,7 @@ u32 cpuid_string(int code, char* str);
 
 u32 disablei( void );
 void restore(u32 eflags);
+
+#include "gcc-builtin.h"
 
 #endif
