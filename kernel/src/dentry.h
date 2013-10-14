@@ -42,7 +42,7 @@ struct dentry
 	struct mountpoint*		d_mountpoint;				// mountpoint information (if mounted)
 };
 
-struct dentry*		d_alloc(const char* name, struct inode* inode);		// allocate a new dentry pointing to inode with the name 'name'
+struct dentry*		d_alloc(const char* name, struct dentry* parent);	// allocate a new dentry pointing to inode with the name 'name'
 struct dentry*		d_alloc_root(struct inode* root);			// allocate a new dentry pointing to the root node 'root'
 void			d_free(struct dentry* dentry);				// free the dentry and associated resources (DO NOT CALL, internal use only)
 

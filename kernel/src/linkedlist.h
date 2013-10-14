@@ -19,6 +19,15 @@ struct list
 
 #define list_for_each(item, head) for( item = (head)->next; item != head; item = (item)->next )
 
+static inline list_t* list_first(list_t* head)
+{
+	return head->next;
+}
+static inline list_t* list_last(list_t* head)
+{
+	return head->prev;
+}
+
 // Is this an empty list?
 static inline int list_empty(list_t* list)
 {

@@ -3,13 +3,250 @@
 #include "sys/mount.h"		// sys_mount/umount flags and the like
 #include "error.h"		// Error constants
 #include "kmem.h"		// kmalloc/kfree
+#include "testfs.h"
 
-// A list of mounts to check a device against currently
-// mounted devices
-static list_t vfs_mount_list = LIST_INIT(vfs_mount_list);
+// global vfs variables
+static list_t			 vfs_filesystem_list = LIST_INIT(vfs_filesystem_list);		// A list of filesystem structures (filesystem types)
+static list_t			 vfs_mount_list = LIST_INIT(vfs_mount_list);			// A list of mounts to check a device against currently
+static struct dentry		*vfs_root = NULL;						// root directory entry for the entire filesystem
 
 // internal function prototypes
 void i_free(struct inode* inode); // free an inode with no more references
+static struct dentry* walk_path_r(char* path, struct dentry** root, u32 flags);
+
+/*
+ * function: register_filesystem
+ * purpose:
+ * 		register a filesystem type with the virtual file system layer.
+ * parameters:
+ * 		fs: the filesystem structure to add to the system
+ * return value:
+ * 		the function returns zero on success or some negative error
+ * 		value on failure.
+ * notes:
+ * 		Should there be a return value? Should there be a check
+ * 		for multiple filesystem types with the same name?
+ */
+int register_filesystem(struct filesystem* fs)
+{
+	// make sure this is initialized, drivers don't usually bother with it
+	INIT_LIST(&fs->fs_fslink);
+	// add it to the list
+	list_add(&fs->fs_fslink, &vfs_filesystem_list);
+	// that's it...
+	return 0;
+}
+
+/*
+ * function: unregister_filesystem
+ * purpose:
+ * 		disconnects a filesystem driver with the virtual file system layer
+ * parameters:
+ * 		fs: the filesystem to disconnect
+ * return value:
+ * 		a negative integer error value or zero on success.
+ * notes:
+ * 
+ */
+int unregister_filesystem(struct filesystem* fs)
+{
+	// make sure it isn't being used!
+	if( !list_empty(&fs->fs_slist) ){
+		return -EBUSY;
+	}
+	// remove from the list
+	list_rem(&fs->fs_fslink);
+	// that's it...
+	return 0;
+}
+
+/*
+ * function: get_filesystem
+ * purpose:
+ * 		finds a filesystem structure by its name
+ * parameters:
+ * 		id: the name of the filesystem (according to its fs_name field)
+ * return value:
+ * 		the pointer to the registered filesystem type or you may check and
+ * 		retrieve the error with IS_ERR and PTR_ERR respectively.
+ * notes:
+ * 
+ */
+struct filesystem* get_filesystem(const char* id)
+{
+	list_t* iter = NULL;
+	list_for_each(iter, &vfs_filesystem_list){
+		struct filesystem* entry = list_entry(iter, struct filesystem, fs_fslink);
+		if( strcmp(entry->fs_name, id) == 0 ){
+			return entry;
+		}
+	}
+	return ERR_PTR(-ENODEV);
+}
+
+/*
+ * function: initialize_filesystem
+ * description:
+ * 		sets up the initial vfs_root and registers a simple in memory filesystem type
+ * parameters:
+ * 		none.
+ * return value:
+ * 		none.
+ * notes:
+ * 
+ */
+void initialize_filesystem( void )
+{
+	vfs_root = d_alloc("/", NULL);
+	if( IS_ERR(vfs_root) ){
+		printk("%2Vvfs: error: unable to allocate root directory entry!\n");
+	}
+	
+	register_filesystem(&testfs_type);
+	
+	printk("vfs: mounting testfs to \"/\"...\n");
+	int result = sys_mount("", "/", "testfs", MF_RDONLY, NULL);
+	printk("vfs: mounting result: %i\n", result);
+	
+	const char* file_path = "/stupid/somefile.txt";
+	
+	printk("vfs: attempting to walk the path \"%s\"...\n", file_path);
+	struct dentry* dentry = walk_path(file_path, WP_DEFAULT);
+	printk("vfs: walk_path result: %p\n", dentry);
+	if( IS_ERR(dentry) ){
+		printk("vfs: result is an error!\nvfs: error value: %i\n", PTR_ERR(dentry));
+	} else {
+		printk("vfs: releasing the dentry reference...\n");
+		d_put(dentry);
+	}
+	
+}
+
+/*
+ * function: walk_path_r
+ * description:
+ * 		walks the path from parent through path and returns the dentry there
+ * 		WP_NOLINK will prevent walk_path_r from following symbolic links.
+ * parameters:
+ * 		path: a string representing the path to the directory entry
+ * 		root: a pointer to the pointer to a dentry to start the search from
+ * 			a double pointer is used so that root can be reassigned from
+ * 			mounts and the references still get counted correctly.
+ * 		flags: WP_* flags OR'd together
+ * return value:
+ * 		a dentry representing the path passed into the function. If the path could
+ * 		not be followed, then an error value is returned and can be retrieved with
+ * 		the PTR_ERR macro.
+ * notes:
+ * 		the path must not start with a '/'. This is an error. "./" is fine, because
+ * 		"." is interpreted as "parent", and the search will continue. In the same
+ * 		way, "../" is also fine and is interpreted as parent->d_parent.
+ * 
+ * 		walk_path_r is called recursively in order to continue following the path.
+ */
+static struct dentry* walk_path_r(char* path, struct dentry** root, u32 flags)
+{
+	char			*slash = NULL;		// The pointer to the slash character from strchr
+	struct dentry		*child = NULL;		// the next entry we found
+	
+	// this is a mountpoint or a mount (either way, grab to topmost mount point for this position)
+	if( (*root)->d_mountpoint ){
+		struct mount* mount = list_entry(list_first(&(*root)->d_mountpoint->mp_mounts), struct mount, m_mplink);
+		d_put(*root);
+		*root = d_get(mount->m_super->s_root);
+	}
+	
+	// Check for ".", "..", "./*", "../*"
+	if( *path == '.' ){
+		if( *(path+1) == '/' ){
+			path += 2;
+		} else if( *(path+1) == '.' ){
+			if( *(path+2) == '/' ){
+				if( (*root)->d_parent == NULL ){
+					return ERR_PTR(-ENOENT);
+				}
+				path += 3;
+				struct dentry* newroot = (*root)->d_parent;
+				d_put(*root);
+				*root = newroot;
+			} else if( *(path+2) == '\0' ){
+				if( (*root)->d_parent == NULL ){
+					return ERR_PTR(-ENOENT);
+				}
+				return d_get((*root)->d_parent); // return another reference to the parent
+			}
+		} else if( *(path+1) == 0 ){
+			return d_get(*root);
+		}
+	}	
+
+	if( *path == 0 ){
+		return d_get(*root);
+	}
+	
+	// find the path deliminator
+	slash = strchr(path, '/');
+	
+	if( slash == NULL )
+	{
+		child = d_lookup(*root, path); // there's no slash, so just lookup the next item
+		return child;
+	}
+	
+	// lookup the new root of the search
+	*slash = 0; // remove the slash
+	child = d_lookup(*root, path); // path now points only to this entry
+	*slash = '/'; // replace the slash
+	if( IS_ERR(child) ){ // is this an error?
+		return child; // return the error
+	}
+	struct dentry* temp = walk_path_r(slash+1, &child, flags); // grab the next..next..next, so on...
+	d_put(child); // release our reference to the child entry
+	return temp;
+	
+}
+
+/*
+ * function: walk_path
+ * description:
+ * 		decides whether to use the current path (held in the process structure) or
+ * 		the root path (e.g. from vfs_root) then calls walk_path_r
+ * parameters:
+ * 		path: a string representing the path to the directory entry
+ * 		flags: WP_* flags OR'd together
+ * return value:
+ * 		a dentry representing the path passed into the function. If the path could
+ * 		not be followed, then an error value is returned and can be retrieved with
+ * 		the PTR_ERR macro.
+ * notes:
+ * 		vfs_root is used as the current directory if '/' is the current character.
+ * 		otherwise, current_task->cwd is used.
+ */
+struct dentry* walk_path(const char* upath, u32 flags)
+{
+	char			 path[512] = {0},		// the internal path array
+				*pPath = path;			// the path pointer
+	struct dentry		*root = NULL,			// where to start the search
+				*result = NULL;			// result from the path walk
+	
+	// copy the user path to the internal path variable
+	strncpy(path, upath, 512);
+	
+	if( *pPath == '/' ){
+		root = d_get(vfs_root);
+		pPath++;
+	} else {
+		//root = task_get_cwd(task_current());
+		root = d_get(vfs_root);
+	}
+	
+	result = walk_path_r(pPath, &root, flags);
+	d_put(root);
+	
+	return result;
+}
+	
+
 
 /*
  * function: sys_mount
@@ -37,15 +274,15 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	dev_t			 device = 0;		// the device to send to the driver
 	list_t			*iter;			// iterator for search the mount list
 	
-	// Shut the compiler up until we implement the resolve_path function
-	UNUSED(target_name);
-	UNUSED(source_name);
-	UNUSED(filesystemtype);
+	// Shut the compiler up until we implement the walk_path function
+	//UNUSED(target_name);
+	//UNUSED(source_name);
+	//UNUSED(filesystemtype);
 	// get the directory entries for the source and target
-	//target = resolve_path(target_name);
-	//source = resolve_path(source_name);
+	target = walk_path(target_name, WP_DEFAULT);
+	source = walk_path(source_name, WP_DEFAULT);
 	// find the filesystem pointer
-	//filesystem = get_filesystem(filesystemtype);
+	filesystem = get_filesystem(filesystemtype);
 	
 	// is the target valid?
 	if( IS_ERR(target) ){
@@ -176,8 +413,8 @@ int sys_umount(const char* target_name, int flags)
 	struct superblock	*super = NULL; // the superblock that is mounted
 	UNUSED(flags);
 	
-	UNUSED(target_name);
-	//target = resolve_path(target_name);
+	//UNUSED(target_name);
+	target = walk_path(target_name, WP_DEFAULT);
 	
 	if( IS_ERR(target) ){
 		return PTR_ERR(target);
@@ -252,7 +489,7 @@ struct inode* i_get(struct superblock* super, ino_t ino)
 	// add it to the superblock list
 	list_add(&inode->i_sblink, &super->s_inode_list);
 	
-	return NULL;
+	return inode;
 }
 
 /*
