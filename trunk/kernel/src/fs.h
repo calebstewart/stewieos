@@ -11,6 +11,9 @@
 #define FS_NODEV		0x00000001
 #define FS_RDONLY		0x00000002
 
+// walk_path flags
+#define WP_DEFAULT		0x00000000
+
 #define filesystem_put_super(fs, super)		do{ if( (fs)->fs_ops->put_super ) (fs)->fs_ops->put_super((fs),super); } while(0)
 
 // Forward declerations for structures
@@ -228,12 +231,18 @@ struct file
 	struct file_lock*		f_lock;			// A file lock (NULL if unlocked)
 };
 
+void initialize_filesystem( void );				// setup the filesystem for boot
+
 int register_filesystem(struct filesystem* fs);
 int unregister_filesystem(struct filesystem* fs);
+
+struct filesystem* get_filesystem(const char* id);		// get a filesystem pointer from its name
 
 struct inode*	i_getref(struct inode* inode);			// get a reference to an inode
 struct inode*	i_get(struct superblock* super, ino_t ino);	// get an inode from the superblock
 void		i_put(struct inode* inode);			// release a reference to an inode (possible free)
+
+struct dentry* walk_path(const char* path, u32 flags);		// walk the path and return the dentry which path refers to
 
 int sys_mount(const char* source, const char* target,
 	      const char* filesystemtype, unsigned long mountflags, const void* data);

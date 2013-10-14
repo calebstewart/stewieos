@@ -3,6 +3,7 @@
 #include "timer.h"
 #include "paging.h"
 #include "kmem.h"
+#include "fs.h"
 
 tick_t my_timer_callback(tick_t, struct regs*);
 tick_t my_timer_callback(tick_t time, struct regs* regs)
@@ -31,9 +32,13 @@ int main( void )
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
 	
 	
-	printk("Registering timer callback for the next second... ");
+	/*printk("Registering timer callback for the next second... ");
 	int result = timer_callback(timer_get_ticks()+timer_get_freq(), my_timer_callback);
-	printk("done (result=%d)\n", result);
+	printk("done (result=%d)\n", result);*/
+	
+	printk("Initializing virtual filesystem...\n");
+	initialize_filesystem();
+	printk("done.\n");
 	
 	//init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
 	

@@ -3,5 +3,7 @@
 
 #define strcpy __builtin_strcpy
 #define strncpy __builtin_strncpy
+#define strchr __builtin_strchr
+#define strcmp __builtin_strcmp
 
 #endif
