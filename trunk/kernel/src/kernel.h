@@ -25,6 +25,12 @@
 #define CPUID_VENDOR_NSC          "Geode by NSC"
 #define CPUID_VENDOR_RISE         "RiseRiseRise"
 
+#ifdef KERNEL_DEBUGGING
+#	define debug_message(fmt, ...) printk("%1V%s:%d:%s: "  fmt "\n", __FILE__, __LINE__, __func__, __VA_ARGS__)
+#else
+#	define debug_message(fmt, ...)
+#endif
+
 /* enum cpuid_requests
  * purpose:
  * 	defines known values for cpuid request codes
@@ -130,6 +136,8 @@ u32 cpuid_string(int code, char* str);
 
 u32 disablei( void );
 void restore(u32 eflags);
+
+u32 read_eip( void );
 
 #include "gcc-builtin.h"
 

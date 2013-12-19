@@ -8,7 +8,7 @@ WARNINGS:=-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes
-CFLAGS:=-nostdlib -std=gnu99 -gdwarf-2 -g3 $(WARNINGS)
+CFLAGS:=-nostdlib -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1
 LDFLAGS:=-Tstewieos.ld -lgcc
 
 CC:=i586-pc-codeos-gcc

@@ -27,6 +27,11 @@ struct filesystem testfs_type = {
 
 int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags)
 {
+	// Shut up the compiler...
+	UNUSED(fs);
+	UNUSED(device);
+	UNUSED(flags);
+	
 	super->s_magic = 0x2BADB002;
 	super->s_ops = &testfs_superblock_ops;
 	
@@ -38,6 +43,7 @@ int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t dev
 
 int testfs_read_inode(struct superblock* super, struct inode* inode)
 {
+	UNUSED(super);
 	inode->i_ops = &testfs_inode_ops;
 	inode->i_size = 42;
 	return 0;

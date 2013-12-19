@@ -31,3 +31,17 @@ restore:
 	push dword [esp+4]
 	popf
 	ret
+	
+;
+; Function: read_eip
+; Parameters:
+;	none.
+; Purpose:
+;	Reads the instruction pointer following the call to this
+;	function.
+;
+[global read_eip]
+read_eip:
+	pop eax
+	push eax
+	ret

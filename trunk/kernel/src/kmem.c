@@ -127,7 +127,7 @@ static struct header* heap_align_block(struct header* header, size_t size, int a
 		head_addr += 0x1000;
 	}
 	// After alignment, is there still enough space to hold our data?
-	if( (block_end - head_addr) < size ){
+	if( head_addr > block_end || (block_end - head_addr) < size ){
 		return NULL; // nope, return
 	}
 	
@@ -144,6 +144,7 @@ static struct header* heap_align_block(struct header* header, size_t size, int a
 	// fix the unaligned block header
 	list_rem(&header->link);
 	header->size = (head_addr - (u32)header);
+	header->magic = STEWIEOS_HEAP_MAGIC;
 	// fix the unaligned block footer
 	new_foot = (struct footer*)( head_addr - sizeof(struct footer));
 	new_foot->magic = STEWIEOS_HEAP_MAGIC;
@@ -158,7 +159,7 @@ static struct header* heap_align_block(struct header* header, size_t size, int a
 static void heap_split_block(struct header* header, size_t size)
 {
 	// is there enough room to split the block?
-	if( (header->size - size) < (sizeof(struct header) + sizeof(struct footer)) ){
+	if( size > header->size || (header->size - size) < (sizeof(struct header) + sizeof(struct footer)) ){
 		return;
 	}
 	
@@ -179,6 +180,7 @@ static void heap_split_block(struct header* header, size_t size)
 	new_foot->header = new_head;
 	// resetup the old block's header and footer
 	header->size = size;
+	header->magic = STEWIEOS_HEAP_MAGIC;
 	new_foot = (struct footer*)( (u32)header + header->size - sizeof(struct footer) );
 	new_foot->magic = STEWIEOS_HEAP_MAGIC;
 	new_foot->header = header;
@@ -212,7 +214,7 @@ static struct header* heap_find_hole(size_t size, int align)
 		// we're now aligned if needed, lets try and free some space if possible
 		heap_split_block(new_head, size);
 		// we have a good block now!
-		return entry;
+		return new_head;
 	}
 	return NULL;
 }
@@ -220,6 +222,8 @@ static struct header* heap_find_hole(size_t size, int align)
 static void heap_insert_hole(struct header* header)
 {
 	if( list_inserted(&header->link) ) return; // we are already in the hole list
+	
+	header->magic = STEWIEOS_HEAP_MAGIC;
 	if( list_empty(&heap_data->holes) ){
 		list_add(&header->link, &heap_data->holes);
 		return;
