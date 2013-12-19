@@ -2,6 +2,7 @@
 [section .init.text]		; This function disables paging, so we need the EIP to point to a physical address
 ;[function initial_switch_dir]
 
+
 ; Disable paging, turn of 4MB pages, set the new page directory and reenable paging!
 initial_switch_dir:
 	mov eax,[esp+4]		; grab the value for cr3

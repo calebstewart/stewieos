@@ -82,5 +82,7 @@ higher_start:
 	jmp $
 
 [section .bss]
+[global initial_stack]
+initial_stack:
 stack:
 	resb 8192

@@ -153,10 +153,11 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 	char buffer[33] = {0}; // long int isn't going to have an outrageously big number
 	char* ptr = &buffer[31];
 	char letter_base = 'a';
-	buffer[32] = 0;
 	if( flags & P_SIGN ){
 		count++;
 	}
+	
+	memset(buffer, 0, 32);
 	
 	if( (flags & P_PREFIX) ){
 		if( base == 8 ) count++;
@@ -193,7 +194,7 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 	}
 	
 	do{
-		if( v%((unsigned long int)base) > 9 )
+		if( (v%(unsigned long int)base) > 9 )
 			*--ptr = (char)(letter_base + (char)((v%((unsigned long int)base))-10));
 		else
 			*--ptr = (char)('0' + (char)(v % ((unsigned long int)base)));

@@ -104,6 +104,9 @@ void initialize_filesystem( void )
 	
 	register_filesystem(&testfs_type);
 	
+	// This block will test a REALLY simple, but I know it works,
+	// and the output is just annoying now...
+	/*
 	printk("vfs: mounting testfs to \"/\"...\n");
 	int result = sys_mount("", "/", "testfs", MF_RDONLY, NULL);
 	printk("vfs: mounting result: %i\n", result);
@@ -119,6 +122,7 @@ void initialize_filesystem( void )
 		printk("vfs: releasing the dentry reference...\n");
 		d_put(dentry);
 	}
+	*/
 	
 }
 

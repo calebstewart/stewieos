@@ -33,6 +33,8 @@ void alloc_frame(page_t* page, int user, int rw)
 {
 	//printk("PHYSICAL_ADDRESS: %p\n", physical_frame);
 	if( page->frame != 0 ){
+		printk("%1Vwarning: attempting to map to an address already in use!\n");
+		while(1);
 		return;
 	}
 	

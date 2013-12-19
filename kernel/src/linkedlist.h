@@ -19,6 +19,13 @@ struct list
 
 #define list_for_each(item, head) for( item = (head)->next; item != head; item = (item)->next )
 
+#define list_next(item, type, member, head) ( (item)->next == head ? (type*)(NULL) : list_entry((item)->next, type, member) )
+
+#define list_is_last(item, head) ((item)->next == head)
+
+// is item the only item in the list contained at head?
+#define list_is_lonely(item, head) ((item)->next == head && (item)->prev == head)
+
 static inline list_t* list_first(list_t* head)
 {
 	return head->next;

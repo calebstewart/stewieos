@@ -4,6 +4,7 @@
 #include "paging.h"
 #include "kmem.h"
 #include "fs.h"
+#include "task.h"
 
 tick_t my_timer_callback(tick_t, struct regs*);
 tick_t my_timer_callback(tick_t time, struct regs* regs)
@@ -15,6 +16,8 @@ tick_t my_timer_callback(tick_t time, struct regs* regs)
 
 // defined in initial_printk.c
 //void clear_screen(void);
+
+int global_var = 0;
 
 int main( void )
 {
@@ -40,20 +43,26 @@ int main( void )
 	initialize_filesystem();
 	printk("done.\n");
 	
-	//init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
+	printk("Initializing multitasking subsystem...\n");
+	task_init();
 	
-	void* p1 = kmalloc(15);
-	u32 p2_phys = 0;
-	printk("p1=%p\n", p1);
-	void* p2 = kmalloc_p(1, &p2_phys);
-	printk("p2=%p\np2_phys=0x%X\n", p2, p2_phys);
-	void* p3 = kmalloc_a(0x1000);
+	printk("Forking...\n");
 	
-	printk("p3=%p\n", p3);
+	pid_t pid = sys_fork();
 	
-	kfree(p3);
-	kfree(p2);
-	kfree(p1);
+	if( pid != 0 )
+	{
+		printk("I'm the parent!\n");
+		global_var = 42;
+	} else {
+		printk("I'm the child!\nglobal_var = %d\n", global_var);
+		sys_exit(-1);
+	}
+	
+	printk("Let's try and kill ourselves...\n");
+	sys_exit(-1);
+	
+	while(1);
 	
 	return ((int)0xDEADBEAF);
 } 

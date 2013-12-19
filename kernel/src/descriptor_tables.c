@@ -62,6 +62,18 @@ static void gdt_set_gate(int n, u32 base, u32 limit, u8 access, u8 gran)
 	gdt_table[n].access = access;
 }
 
+void debug_interrupt(struct regs* regs);
+void debug_interrupt(struct regs* regs)
+{
+	u32 dr6 = 0;
+	asm volatile ("movl %%dr6,%0" : "=r"(dr6));
+	printk("%1VDebugging Exception!\n");
+	printk("%1VInstruction Pointer: 0x%X\n", regs->eip);
+	printk("%1VEFLAGS: 0x%X\n", regs->eflags);
+	printk("%1VDR6: 0x%X\n", dr6);
+	asm volatile ("hlt");
+}
+
 static int initialize_idt( void )
 {
 	idt_ptr.limit = sizeof(struct idt_entry)*256 - 1;
@@ -79,7 +91,7 @@ static int initialize_idt( void )
 	idt_set_gate(9, isr9, 0x08, 0x8E);
 	idt_set_gate(10, isr10, 0x08, 0x8E);
 	idt_set_gate(11, isr11, 0x08, 0x8E);
-	idt_set_gate(12, isr12, 0x08, 0x8E);
+	idt_set_gate(12, isr12, 0x08, 0x8E); 
 	idt_set_gate(13, isr13, 0x08, 0x8E);
 	idt_set_gate(14, isr14, 0x08, 0x8E);
 	idt_set_gate(15, isr15, 0x08, 0x8E);
@@ -129,7 +141,9 @@ static int initialize_idt( void )
 	idt_set_gate(45, irq13, 0x08, 0x8E);
 	idt_set_gate(46, irq14, 0x08, 0x8E);
 	idt_set_gate(47, irq15, 0x08, 0x8E);
-
+	
+	register_interrupt(0x01, debug_interrupt);
+	
 	flush_idt((void*)&idt_ptr);
 	
 	return 0;

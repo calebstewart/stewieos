@@ -1,8 +1,9 @@
 #ifndef _TIMER_H_
 #define _TIMER_H_
 
-#define TIMER_MAX_CALLBACKS 128
-#define TIMER_CANCEL ((unsigned long)-1)
+#define TIMER_MAX_CALLBACKS 128				// maximum number of timer callbacks
+#define TIMER_CANCEL ((unsigned long)-1)		// cancel the timer
+#define TIMER_IN(t) (timer_get_ticks() + (t))		// fire the time in t ticks from now
 
 struct regs;
 typedef unsigned long tick_t;

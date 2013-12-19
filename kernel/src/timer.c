@@ -15,6 +15,8 @@ static tick_t current_tick = 0;							// The current time (tick count since init
 static struct callback_info callbacks[TIMER_MAX_CALLBACKS];			// The list of callback structures to be inserted (empty=>when==TIMER_CANCEL)
 static struct callback_info* next_callback = (struct callback_info*)0;		// The next callbacks info structure
 
+void task_preempt(struct regs* regs);
+
 void timer_interrupt(struct regs*);
 void timer_interrupt(struct regs* regs)
 {
@@ -58,7 +60,8 @@ void timer_interrupt(struct regs* regs)
 			}
 		} // end tmp->when != TIMER_CANCEL
 	} // end while next callback and next callback time <= current time
-	
+
+	task_preempt(regs);
 }
 
 

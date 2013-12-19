@@ -4,7 +4,7 @@
 # Date: 10 September 2013
 # Prupose: A top-level make file to build the OS, toolchain, initrd,
 # :		etc...
-# 
+#
 # ===================================================================
 # = Change Log                                                      |
 # ===================================================================
