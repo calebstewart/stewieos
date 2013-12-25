@@ -10,6 +10,9 @@ struct heap_data
 {
 	//struct header* hole[512];
 	list_t holes; // a linked list of holes sorted by size
+	u32 endptr;
+	u32 startptr;
+	u32 maxptr;
 };
 
 /* struct header
@@ -96,6 +99,7 @@ static struct header* heap_find_hole(size_t size, int align);
 static void heap_merge_next(struct header* header);
 static struct header* heap_merge_prev(struct header* header);
 static void heap_insert_hole(struct header* header);
+static struct header* heap_expand(u32 length);
 
 /* function: heap_align_block
  * purpose: splits a block so that it has one piece whose address is page aligned, if align is true.
@@ -216,7 +220,7 @@ static struct header* heap_find_hole(size_t size, int align)
 		// we have a good block now!
 		return new_head;
 	}
-	return NULL;
+	return heap_expand(size);
 }
 
 static void heap_insert_hole(struct header* header)
@@ -237,7 +241,8 @@ static void heap_insert_hole(struct header* header)
 		}
 		if( item->next == &heap_data->holes ){
 			list_add(&header->link, item); // add after the last item
-			break; // otherwise, we will read this as the next item and continue forever D:
+			return;
+			//break; // otherwise, we will read this as the next item and continue forever D:
 		}
 	}
 }
@@ -288,9 +293,61 @@ static void heap_merge_next(struct header* header)
 	header->size += next_head->size; // increase the size of this block
 	footer = (struct footer*)( (u32)header + header->size - sizeof(struct footer) );
 	footer->header = header;
+	footer->magic = STEWIEOS_HEAP_MAGIC;
 	list_rem(&header->link); // remove this block (we need to transplant it for the new size
 	
 	heap_insert_hole(header); // reinsert into the correct location
+}
+
+/* function: heap_expand
+ * purpose:
+ * 	expands the heap by a given ammount, although it will
+ * 	always expand by a multiple of the page boundary (4kB)
+ * parameters:
+ * 	length - how much more data you need (no need to be page aligned)
+ * return value:
+ * 	the newly created header (is already a hole when returned).
+ */
+static struct header* heap_expand(u32 length)
+{
+	// page align the length
+	if( (length & 0xFFF) != 0 ){
+		length = (length & 0xFFFFF000) + 0x1000;
+	}
+	
+	// Check if we have the room to grow
+	if( (heap_data->endptr+length) >= heap_data->maxptr ){
+		printk("%2Vheap_expand: unable to further expand kernel heap!\n");
+		asm volatile ("cli;hlt");
+	}
+	
+	// Calculate the new header placement, and the counting
+	// variable for allocation of new frames
+	u32 p = heap_data->endptr;
+	struct header* header = (struct header*)( heap_data->endptr );
+	// Increase the heap data end pointer
+	heap_data->endptr += length;
+	// Allocate the necessary frames
+	while( p < heap_data->endptr ){
+		alloc_frame(get_page((void*)p, 0, kerndir), 0, 1);
+		invalidate_page((void*)p);
+		p += 0x1000;
+	}
+	
+	// Setup the header
+	header->size = length;
+	header->magic = STEWIEOS_HEAP_MAGIC;
+	INIT_LIST(&header->link);
+	// Setup the footer
+	struct footer* footer = (struct footer*)( (u32)header + header->size - sizeof(struct footer) );
+	footer->header = header;
+	footer->magic = STEWIEOS_HEAP_MAGIC;
+	// Insert the new hole
+	heap_insert_hole(header);
+	
+	// check if we can merge with the previous header and return
+	// whatever merge_prev returns
+	return heap_merge_prev(header);
 }
 
 static struct header* heap_merge_prev(struct header* header)
@@ -311,20 +368,18 @@ static struct header* heap_merge_prev(struct header* header)
 	}
 	
 	// previous block isn't a hole, we can't merge
-	if( !list_inserted(&header->link) ){
+	if( !list_inserted(&prev_head->link) ){
 		return header;
 	}
 	
-	if( list_inserted(&header->link) ){
-		list_rem(&header->link);
-	}
+	list_rem(&header->link);
+	list_rem(&prev_head->link);
 	
 	// eat the header!
 	prev_head->size += header->size;
 	prev_foot = (struct footer*)(((u32)prev_head) + prev_head->size - sizeof(struct footer));
 	prev_foot->header = prev_head;
 	
-	list_rem(&prev_head->link);
 	heap_insert_hole(prev_head);
 	
 	return prev_head;
@@ -368,6 +423,9 @@ void init_kheap(u32 where, u32 end_addr, u32 max_addr)
 	struct heap_data* data = (struct heap_data*)(where);
 	memset(data, 0, sizeof(struct heap_data));
 	heap_data = data;
+	heap_data->endptr = end_addr;
+	heap_data->startptr = where;
+	heap_data->maxptr = where + 0x0FFFFFFF;
 	INIT_LIST(&heap_data->holes);
 	
 	// initialize the first header as a hole in the list

@@ -1,9 +1,49 @@
 #ifndef _GCC_BUILTIN_H_
 #define _GCC_BUILTIN_H_
 
-#define strcpy __builtin_strcpy
-#define strncpy __builtin_strncpy
-#define strchr __builtin_strchr
-#define strcmp __builtin_strcmp
+static inline int strcmp( const char* s1, const char* s2)
+{
+	while( 1 ){
+		// they are different or they are the same but at 
+		// the end of the string.
+		if( *s1 != *s2 ) return (*s1 - *s2);
+		else if( *s1 == 0 ) return 0;
+	}
+	return 0;
+}
+
+static inline char* strncpy( char* d, const char* s, size_t n)
+{
+	char* tmp = d;
+	while( n ){
+		*d = *s;
+		if( *s ) s++;
+		d++;
+		n--;
+	}
+	return tmp;
+}
+
+static inline char* strcpy( char* d, const char* s)
+{
+	char* tmp = d;
+	while( *s ){
+		*(d++) = *(s++);
+	}
+	return tmp;
+}
+
+static inline char* strchr( const char* str, int character )
+{
+	for(; *str != 0; str++){
+		if( *str == (char)character ){
+			return ((char*)(str));
+		}
+	}
+	if( character == 0 ) return (char*)(str);
+	return (char*)0;
+}
+
+
 
 #endif

@@ -8,8 +8,8 @@ WARNINGS:=-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes
-CFLAGS:=-nostdlib -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1
-LDFLAGS:=-Tstewieos.ld -lgcc
+CFLAGS:=-nostdlib -nostartfiles -fno-builtin -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1
+LDFLAGS:=-Tstewieos.ld -lgcc -nostdlib
 
 CC:=i586-pc-codeos-gcc
 LD:=i586-pc-codeos-gcc
@@ -30,7 +30,7 @@ clean:
 	rm -f $(OBJFILES)
 
 $(KERNEL_NAME): $(OBJFILES)
-	$(LD) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(LDFLAGS)
 
 %.s.o: %.s
 	$(ASM) -f elf32 -g $(@:.s.o=.s) -o $@

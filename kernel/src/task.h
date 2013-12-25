@@ -10,45 +10,67 @@
 #include "pmm.h"
 
 // A running task
-#define TF_RUNNING 0x00000001
+#define TF_RUNNING ((u32)0x00000001)
 // A task requesting to be rescheduled (giving up its timeslice)
-#define TF_RESCHED 0x00000002
+#define TF_RESCHED ((u32)0x00000002)
 // The task is waiting on another task
-#define TF_WAITTASK 0x00000004
+#define TF_WAITTASK ((u32)0x00000004)
 // The task is waiting on a signal
-#define TF_WAITSIG 0x00000008
+#define TF_WAITSIG ((u32)0x00000008)
 // The task is requesting to be killed
-#define TF_EXIT 0x00000010
+#define TF_EXIT ((u32)0x00000010)
+// The has been killed, and is waiting to be waited for
+#define TF_ZOMBIE ((u32)0x00000020)
+
+#define T_ISZOMBIE(task) ((task)->t_flags & TF_ZOMBIE)
+#define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
 
 #define TASK_KSTACK_ADDR	0xFFFFD000
 #define TASK_KSTACK_SIZE	0x2000
 #define TASK_MAGIC_EIP		0xDEADCABB
 
+/* NOTE These should be moved to sys/wait.h */
+#define WNOHANG 0x00000001
+
+// This is a more convenient way to reschedule
+// as task_preempt will do it, but you have to
+// pass a NULL regs struct to it (regs is
+// unused anyway).
+#define schedule() task_preempt((struct regs*)(NULL))
+
 struct task
 {
-	pid_t			t_id;					// task id
+	pid_t			t_pid;					// process id
+	pid_t			t_gid;					// process group id
 	u32			t_flags;				// the flags/state of this task
 	u32			t_esp;					// the stack pointer
 	u32			t_ebp;					// the base pointer
 	u32			t_eip;					// the instruction pointer to jump to
 	u32			t_eflags;				// the eflags before the last switch
+	pid_t			t_waitfor;				// what are we waiting on? See waitpid.
 	
 	tick_t			t_ticks_left;				// the number of clock ticks left until we preempt
 	
-	int			t_result;				// result code from sys_exit
+	int			t_status;				// result code from sys_exit
 	
 	struct page_dir*	t_dir;					// page directory for this task
 	//struct vfs		t_vfs;					// this tasks virtual file system information
 	
-	list_t			t_sibling;				// the siblings of this task (in whatever list it resides)
-	struct task*		t_waitingon;				// the task we are waiting on
+	list_t			t_sibling;				// the link in the parents children list
+	list_t			t_children;				// list of child tasks (forked processes)
+	list_t			t_queue;				// link in the current queue
+	list_t			t_globlink;				// link in the global list
+	struct task*		t_parent;				// the parent of this task
 };
 
 void task_init( void );
 void task_preempt(struct regs* regs);
 void task_kill(struct task* task);
+// lookup a task based on process id
+struct task* task_lookup(pid_t pid);
 
 int sys_fork( void );
 void sys_exit( int result );
+pid_t sys_waitpid(pid_t pid, int* status, int options);
 
 #endif
