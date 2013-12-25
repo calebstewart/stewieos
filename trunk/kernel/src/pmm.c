@@ -3,6 +3,34 @@
 u32* physical_frame = NULL;
 u32 physical_frame_count = 0;
 
+// The starting address of the stack
+u16* phys_stack = NULL;
+// the size of the stack
+u32 phys_stack_size = 0;
+// The current stack pointer
+u16* phys_stack_ptr = NULL;
+
+void push_frame(u32 frame)
+{
+	if( phys_stack_ptr == phys_stack ){
+		printk("%2Verror: physical frame allocator stack overflow!\n");
+		asm volatile ("cli; hlt");
+	}
+	
+	*(--phys_stack_ptr) = ((u16)(frame / 0x1000));
+}
+
+u32 pop_frame( void )
+{
+	if( phys_stack_ptr == ((u16*)( (u32)phys_stack + phys_stack_size )) ){
+		printk("%2Verror: out of physical memory!\n");
+		asm volatile ("cli; hlt");
+	}
+	
+	return (u32)(*(phys_stack_ptr++)) * 0x1000;
+}
+
+
 u32 find_free_frame( void )
 {
 	for(u32 i = 0; i < (physical_frame_count/32); ++i)

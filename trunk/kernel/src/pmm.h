@@ -12,4 +12,7 @@ void clone_frame(page_t* dest, page_t* src);			// Map a page to the same frame a
 void alloc_frame(page_t* page, int user, int rw);		// Allocate a frame for a virtual page
 void free_frame(page_t* page);					// Release the frame which belongs to a virtual page
 
+void push_frame(u32 frame);					// push (free) a frame
+u32 pop_frame( void );						// pop (alloc) a frame
+
 #endif

@@ -1,8 +1,10 @@
 #include "task.h"
+#include <errno.h>
 
 extern u32 		initial_stack;		// defined in start.s
 struct task		*current = NULL;	// always points to the current task
 list_t			ready_tasks;		// list of ready tasks
+list_t			task_globlist;		// global list of all tasks
 //struct task		*ready_tasks;		// list of ready tasks
 pid_t			next_pid = 0;		// the next process id
 
@@ -28,6 +30,7 @@ void task_init( void )
 	
 	// initialize the task list
 	INIT_LIST(&ready_tasks);
+	INIT_LIST(&task_globlist);
 	
 	// allocate the initial
 	init = (struct task*)kmalloc(sizeof(struct task));
@@ -39,10 +42,14 @@ void task_init( void )
 	memset(init, 0, sizeof(struct task));
 	
 	// setup some initial values
-	init->t_id = next_pid++;
+	init->t_pid = next_pid++;
 	init->t_flags = TF_RUNNING;
 	init->t_dir = copy_page_dir(curdir);
+	init->t_parent = init;
 	INIT_LIST(&init->t_sibling);
+	INIT_LIST(&init->t_queue);
+	INIT_LIST(&init->t_children);
+	INIT_LIST(&init->t_globlink);
 	//printk("%2Vtask_init: init->t_dir=%08X\n", init->t_dir);
 	//while(1);
 	// we are still using kerndir up to now
@@ -82,7 +89,7 @@ void task_init( void )
 	// load the new stack pointer and base pointer
 	asm volatile("mov %0,%%ebp; mov %1,%%esp"::"r"(new_base), "r"(new_stack));
 	
-	list_add(&init->t_sibling, &ready_tasks);
+	list_add(&init->t_queue, &ready_tasks);
 	current = init;
 }
 
@@ -103,13 +110,13 @@ void task_preempt(struct regs* regs)
 	u32 eip;					// the old instruction pointer
 	
 	// There are no more tasks!
-	if( !current || list_is_lonely(&current->t_sibling, &ready_tasks) )
+	if( !current || list_is_lonely(&current->t_queue, &ready_tasks) )
 	{
 		return;
 	}
 	
 	// we have a timing schedule, follow it
-	if( current->t_ticks_left != 0 && (current->t_flags & TF_RUNNING))
+	if( current->t_ticks_left != 0 && (current->t_flags & TF_RUNNING) && !(current->t_flags & TF_RESCHED))
 	{
 		current->t_ticks_left--;
 		return;
@@ -130,20 +137,25 @@ void task_preempt(struct regs* regs)
 	current->t_eip = eip;
 	current->t_esp = esp;
 	current->t_ebp = ebp;
+	current->t_flags &= ~TF_RESCHED; // remove the reschedule flag
 
-	current = list_next(&current->t_sibling, struct task, t_sibling, &ready_tasks);
+	// if this task just stopped running, it is no longer in the ready_tasks queue
+	if( T_RUNNING(current) )
+		current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
+	else
+		current = list_entry(list_first(&ready_tasks), struct task, t_queue);
 	// Check for end of list or dead task
 	while( !current || (current->t_flags & TF_EXIT) )
 	{
 		if(!current)
 		{
-			current = list_next(&ready_tasks, struct task, t_sibling, &ready_tasks);
+			current = list_next(&ready_tasks, struct task, t_queue, &ready_tasks);
 			continue;
 		}
 		if(current->t_flags & TF_EXIT)
 		{
 			struct task* dead = current;
-			current = list_next(&current->t_sibling, struct task, t_sibling, &ready_tasks);
+			current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
 			task_kill(dead);
 			continue;
 		}
@@ -197,7 +209,7 @@ void task_kill(struct task* dead)
 		return;
 	}
 	
-	if( dead->t_id == 0 )
+	if( dead->t_pid == 0 )
 	{
 		debug_message("warning: attempted to kill init task!", 0);
 		
@@ -206,16 +218,63 @@ void task_kill(struct task* dead)
 		return;
 	}
 	
-	debug_message("killing task with id=%d", dead->t_id);
+	if( !list_empty(&dead->t_children) )
+	{
+		debug_message("warning: unable to kill parent task with running children!", 0);
+		debug_message("\ttask %d is not killed, but is not running either.", dead->t_pid);
+		return;
+	}
 	
-	// remove the task from its list
-	list_rem(&dead->t_sibling);
+	debug_message("killing task with id=%d", dead->t_pid);
+	
+	// remove the task from the running queue
+	list_rem(&dead->t_queue);
+	dead->t_flags = TF_ZOMBIE;
 	
 	// we haven't implemented this yet...
 	//free_page_dir(dead->t_dir);
-	// free the task structure (WARNING dead is now a... dead pointer)
-	kfree(dead);
 	
+	// The task is not actually dead yet.
+	// It needs to notify the parent of it's death,
+	// then the parent will do what it needs to.
+	// if the parent isn't listening, the child
+	// will be cleaned up upon the parents death.
+	
+	if( dead->t_parent->t_flags & TF_WAITTASK )
+	{
+		if( dead->t_parent->t_waitfor == -1 || \
+			(dead->t_parent->t_waitfor == 0 && dead->t_gid == dead->t_parent->t_pid) || \
+			(dead->t_parent->t_waitfor < -1 && dead->t_gid == (-dead->t_parent->t_waitfor)) || \
+			(dead->t_parent->t_waitfor > 0 && dead->t_parent->t_waitfor == dead->t_pid ) )
+		{
+			dead->t_parent->t_waitfor = dead->t_pid;
+			dead->t_parent->t_status = dead->t_status;
+			dead->t_parent->t_flags &= ~TF_WAITTASK;
+			dead->t_parent->t_flags |= TF_RUNNING;
+			list_add(&dead->t_parent->t_queue, &ready_tasks); 
+		}
+	}
+	
+}
+
+/* function: task_lookup
+ * purpose:
+ * 	look for a task with a given process id
+ * parameters:
+ * 	pid - the process id to search for
+ * return value:
+ * 	the task structure for the given task
+ * 	or NULL if it doesn not exist.
+ */
+struct task* task_lookup(pid_t pid)
+{
+	list_t* iter = NULL;
+	list_for_each(iter, &task_globlist)
+	{
+		struct task* task = list_entry(iter, struct task, t_globlink);
+		if( task->t_pid == pid ) return task;
+	}
+	return NULL;
 }
 
 /* function: sys_fork
@@ -241,16 +300,22 @@ int sys_fork( void )
 	eflags = disablei();
 	// allocate the task structure
 	task = (struct task*)kmalloc(sizeof(struct task));
+	memset(task, 0, sizeof(struct task));
 	
 	// grab the esp and ebp values
 	asm volatile("mov %%esp,%0" : "=r"(esp));
 	asm volatile("mov %%ebp,%0" : "=r"(ebp));
 	
 	// setup the initial values for the new task
-	task->t_id = next_pid++;
+	task->t_pid = next_pid++;
 	task->t_flags  = 0;
 	task->t_esp = esp;
 	task->t_ebp = ebp;
+	task->t_parent = current;
+	INIT_LIST(&task->t_children);
+	INIT_LIST(&task->t_sibling);
+	INIT_LIST(&task->t_queue);
+	INIT_LIST(&task->t_globlink);
 
 	// copy the page directory
 	task->t_dir = copy_page_dir(current->t_dir);
@@ -278,19 +343,21 @@ int sys_fork( void )
 //	current->t_next = task;
 	
 	// add the task just after the current task
-	list_add(&task->t_sibling, &ready_tasks);
+	list_add(&task->t_queue, &ready_tasks);
+	list_add(&task->t_sibling, &current->t_children);
+	list_add(&task->t_globlink, &task_globlist);
 	
 	task->t_eflags = eflags;
 	
 	// the task is ready to run
 	// and the parent will give up its timeslice
 	task->t_flags = TF_RUNNING;
-	current->t_flags = TF_RESCHED;
+	current->t_flags |= TF_RESCHED;
 	
 	
 	restore(eflags);
 	
-	return task->t_id;
+	return task->t_pid;
 }
 
 /* function: sys_exit
@@ -305,13 +372,119 @@ int sys_fork( void )
  */
 void sys_exit( int result )
 {
+	if( current->t_pid == 0 )
+	{
+		debug_message("warning: attempted to kill init task!", 0);
+		return;
+	}
+	
 	u32 eflags = disablei();
 	
-	current->t_result = result;
+	current->t_status = result;
 	current->t_flags = TF_EXIT;
+	
+	schedule();
 	
 	restore(eflags);
 	
 	while(1);
 	
+}
+
+/* function: sys_waitpid
+ * purpose:
+ * 	waits for a given child process to change state.
+ * parameters:
+ * 	pid - process id of the child to wait on
+ * 	status - the status information from the process
+ * 	options - optional wait flags
+ * return value:
+ * 	the pid of the process that changed state.
+ */
+pid_t sys_waitpid(pid_t pid, int* status, int options)
+{
+	// we only support two options at the moment.
+	if( options != 0 && options != WNOHANG ){
+		return (pid_t)-EINVAL;
+	}
+	
+	u32 eflags = disablei();
+	list_t* iter = NULL;
+	int need_wait = 1;
+	
+	// This means we want to wait on a specific child process
+	if( pid > 0 )
+	{
+		// first check if the process is already changed state
+		struct task* task = task_lookup(pid);
+		if( task == NULL ){
+			restore(eflags);
+			return (pid_t)-ECHILD;
+		} else if( task->t_parent != current ){
+			restore(eflags);
+			return (pid_t)-ECHILD;
+		} else if( T_ISZOMBIE(task) ){
+			if( status ) 
+				*status = task->t_status;
+			pid = task->t_pid;
+			need_wait = 0;
+		}
+	} else {
+	// This means we are waiting on a group of processes
+		// First check if any of these processes have already changed state
+		list_for_each(iter, &current->t_children){
+			struct task* task = list_entry(iter, struct task, t_sibling);
+			// has it changed state, and
+			// are we looking for any child, or
+			// this task is in the group which we are the leader of or
+			// this task is in the specified group
+			// we should store the status and return the pid
+			if( T_ISZOMBIE(task) && (pid == -1 || (pid == 0 && task->t_gid == current->t_pid) || (pid < -1 && task->t_pid == (-pid))) ){
+				if( status )
+					*status = task->t_status;
+				pid = task->t_pid;
+				need_wait = 0;
+			}
+		}
+	}
+	
+	// This means no task was found that had already changed states
+	if( need_wait == 1 )
+	{
+		// the process asked not to hang
+		if( options  & WNOHANG ){
+			restore(eflags);
+			return 0;
+		}
+		
+		// This means that the task has not yet changed states
+		// store the pid that we are waiting on
+		current->t_waitfor = pid;
+		// Set the wait flag and reschedule flag
+		current->t_flags &= ~TF_RUNNING;
+		current->t_flags |= TF_WAITTASK;
+		// Remove ourself from the running queue
+		list_rem(&current->t_queue);
+		
+		// reschedule the task system (we already set the reschedule flag for this task
+		// so it will pick a new one, and not return until TF_WAITTASK is unset).
+		schedule();
+
+		// the task_kill function for the other task will store
+		// its' pid and status information in our task structure
+		pid = current->t_waitfor;
+		*status = current->t_status;
+	}
+	
+	struct task* task = task_lookup(pid);
+	list_rem(&task->t_sibling); // remove from the parent-child list
+	list_rem(&task->t_globlink); // remove from the global task list
+	// the tasks runtime data should have already been free'd, we just need
+	// to free the task structure and remove it from lists.
+	kfree(task);
+	
+	restore(eflags);
+	
+	// return the tasks process id
+	return pid;
 }

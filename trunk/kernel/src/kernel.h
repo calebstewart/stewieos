@@ -2,6 +2,7 @@
 #define _KERNEL_H_
 
 #include <sys/types.h>
+#include "gcc-builtin.h"
 
 #define MAXNAMELEN		256			/* the maximum length of a name string in the file system */
 

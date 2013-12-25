@@ -3,6 +3,7 @@
 
 #include "kernel.h"
 #include "descriptor_tables.h"
+#include "multiboot.h"
 
 typedef struct page
 {
@@ -32,7 +33,7 @@ typedef struct page_dir
 extern page_dir_t* kerndir;		// the kernel page directory mappings
 extern page_dir_t* curdir;		// the current page directory (should match current->p_dir)
 
-void init_paging( void );
+void init_paging( multiboot_info_t* mb );
 
 /*! \brief Change virtual address spaces
  * 

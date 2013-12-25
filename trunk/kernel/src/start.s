@@ -20,7 +20,7 @@ KERNEL_PAGE_NUMBER	equ (KERNEL_VIRTUAL_BASE >> 22)
 [extern bss]
 [extern end]
 	
-[extern main]
+[extern kmain]
 [global start]
 
 ;[global start]
@@ -78,7 +78,7 @@ higher_start:
 	
 	push ebx
 	cli
-	call main
+	call kmain
 	jmp $
 
 [section .bss]

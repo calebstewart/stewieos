@@ -19,14 +19,37 @@ void initial_switch_dir(void* cr3);
  * 	Initializing the paging structures
  * 	and initial memory handling.
  */
-void init_paging( void )
+void init_paging( multiboot_info_t* mb )
 {
 	// 32MB of memory for now... we will fix it later
-	u32 memory_size = 0x1000000;
+	u32 memory_size = 1024*(mb->mem_lower + 1024 + mb->mem_upper);
 	
 	physical_frame_count = memory_size / 0x1000; // number of frames
 	physical_frame = kmalloc((size_t)(physical_frame_count / 8));
-	memset(physical_frame, 0, physical_frame_count/8);
+	memset(physical_frame, (int)0xFFFFFFFF, physical_frame_count/8);
+	
+	if( !(mb->flags & MULTIBOOT_INFO_MEM_MAP) ) {
+		printk("\n%2Verror: no memory map included from the bootloader! Unable to boot...\n");
+		asm volatile("cli;hlt");
+	}
+	
+	mb->mmap_addr += KERNEL_VIRTUAL_BASE;
+	u32 mmap_end = mb->mmap_addr + mb->mmap_length;
+	
+	for(multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)mb->mmap_addr;\
+		((u32)mmap) < mmap_end;\
+		mmap = (multiboot_memory_map_t*)((u32)mmap + mmap->size + sizeof(multiboot_uint32_t)))
+	{
+		//printk("memory block: %p-%p (%s)\n", (u32)mmap->addr, (u32)mmap->addr + (u32)mmap->len - 1, mmap->type == 1 ? "Available" : "Reserved");
+		if( mmap->type != 1 ) continue;
+		multiboot_uint64_t frame = (u32)mmap->addr;
+		while( frame < (mmap->addr + mmap->len) ){
+			release_frame((u32)frame);
+			frame += 0x1000;
+		}
+	}
+
+	//while(1);
 	
 	kerndir = (page_dir_t*)kmalloc_a(sizeof(page_dir_t));
 	memset(kerndir, 0, sizeof(page_dir_t));
@@ -34,17 +57,22 @@ void init_paging( void )
 	curdir->phys = (u32)( &curdir->tablePhys[0] ) - KERNEL_VIRTUAL_BASE;
 
 	// allocate the initial page tables for the kernel heap
-	for( u32 a = 0xE0000000; a < 0xE0010000; a += 0x1000 ){
+	for( u32 a = 0xE0000000; a < 0xEFFFF000; a += 0x1000 ){
 		get_page((void*)a, 1, kerndir);
 	}
 	
 	u32 i = KERNEL_VIRTUAL_BASE;
 	while( i < placement_address )
 	{
-		// get a new frame and map it
-		alloc_frame(get_page((void*)i, 1, kerndir), 1, 0);
-		// identity map the same frame
-		clone_frame(get_page((void*)(i - KERNEL_VIRTUAL_BASE), 1, kerndir), get_page((void*)i, 1, kerndir));
+		// identity map as well as higher half map
+		page_t* page_low = get_page((void*)i, 1, kerndir);
+		page_t* page_hi = get_page((void*)(i-KERNEL_VIRTUAL_BASE), 1, kerndir);
+		reserve_frame(i-KERNEL_VIRTUAL_BASE);
+		page_hi->present = 1;
+		page_hi->user = 1;
+		page_hi->rw = 0;
+		page_hi->frame = ((i-KERNEL_VIRTUAL_BASE) / 0x1000) & 0x000FFFFF;
+		memcpy(page_low, page_hi, sizeof(page_t));
 		i+=0x1000;
 	}
 	
@@ -270,7 +298,9 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 		printk("%2Vcopy_page_dir: unable to allocate new directory!\n");
 		return NULL;
 	}
-	memset(dst, 0, sizeof(page_dir_t));
+	memset((char*)dst + 0x1000, 0, 0x1004);
+	memset(dst, 0, 0x1000);
+	//memset(dst, 0, sizeof(page_dir_t));
 	dst->phys = tmp;
 	
 	for(int t = 0; t < 1024; ++t)
