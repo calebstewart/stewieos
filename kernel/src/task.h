@@ -29,6 +29,8 @@
 #define TASK_KSTACK_SIZE	0x2000
 #define TASK_MAGIC_EIP		0xDEADCABB
 
+#define TASK_MAX_OPEN_FILES 1024
+
 /* NOTE These should be moved to sys/wait.h */
 #define WNOHANG 0x00000001
 
@@ -42,6 +44,7 @@ struct task
 {
 	pid_t			t_pid;					// process id
 	pid_t			t_gid;					// process group id
+	uid_t			t_uid;
 	u32			t_flags;				// the flags/state of this task
 	u32			t_esp;					// the stack pointer
 	u32			t_ebp;					// the base pointer
@@ -53,8 +56,10 @@ struct task
 	
 	int			t_status;				// result code from sys_exit
 	
+	mode_t			t_umask;				// The current umask
+	
 	struct page_dir*	t_dir;					// page directory for this task
-	//struct vfs		t_vfs;					// this tasks virtual file system information
+	struct vfs		t_vfs;					// this tasks virtual file system information
 	
 	list_t			t_sibling;				// the link in the parents children list
 	list_t			t_children;				// list of child tasks (forked processes)
@@ -69,6 +74,7 @@ void task_kill(struct task* task);
 // lookup a task based on process id
 struct task* task_lookup(pid_t pid);
 
+pid_t sys_getpid( void );
 int sys_fork( void );
 void sys_exit( int result );
 pid_t sys_waitpid(pid_t pid, int* status, int options);

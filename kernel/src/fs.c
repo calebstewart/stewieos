@@ -4,15 +4,97 @@
 #include "error.h"		// Error constants
 #include "kmem.h"		// kmalloc/kfree
 #include "testfs.h"
+#include "task.h"
+#include "kernel.h"
+#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // global vfs variables
 static list_t			 vfs_filesystem_list = LIST_INIT(vfs_filesystem_list);		// A list of filesystem structures (filesystem types)
 static list_t			 vfs_mount_list = LIST_INIT(vfs_mount_list);			// A list of mounts to check a device against currently
 static struct dentry		*vfs_root = NULL;						// root directory entry for the entire filesystem
+extern struct task		*current;
 
 // internal function prototypes
 void i_free(struct inode* inode); // free an inode with no more references
-static struct dentry* walk_path_r(char* path, struct dentry** root, u32 flags);
+
+/* function: path_put
+ * purpose:
+ * 	release references to the contained dentry and mount stuctures.
+ * parameters:
+ * 	path - the path to release
+ * return value:
+ * 	none.
+ * notes:
+ * 	There is no path_get, because there is no reference counting for
+ * 	path structures themselves. You should copy the contents, not
+ * 	the pointer to it. You shouldn't leave path pointers laying around
+ * 	that you didn't create yourself.
+ * 
+ * 	There is a path_copy function to copy the contents with correct
+ * 	reference counting.
+ */
+void path_put(struct path* path)
+{
+	d_put(path->p_dentry);
+	mnt_put(path->p_mount);
+}
+
+/* function: path_copy
+ * purpose:
+ * 	copy the contents of a path structure, and keep reference counts.
+ * parameters:
+ * 	dst - the path structure to fill
+ * 	src - the path structure to copy
+ * return value:
+ * 	none.
+ */
+void path_copy(struct path* dst, struct path* src)
+{
+	dst->p_dentry = d_get(src->p_dentry);
+	dst->p_mount = mnt_get(src->p_mount);
+}
+
+/* function: mnt_get
+ * purpose:
+ * 	increase the reference count of the mount structure
+ * 	You cannot unmount a mount while its mount strucutre
+ * 	has outstanding references.
+ * 
+ * 	You should not use a mount structure until you have
+ * 	a reference to it, and you should always call mnt_put
+ * 	when you are done.
+ * parameters:
+ * 	mount - the mount to grab a reference of
+ * return value:
+ * 	A pointer to the newly retrieved mount structure.
+ */
+struct mount* mnt_get(struct mount* mount)
+{
+	if( !mount ) return NULL;
+	mount->m_refs++;
+	return mount;
+}
+
+/* function: mnt_put
+ * purpose:
+ * 	decrease the reference count of the mount structure.
+ * 
+ * 	See also 'mnt_get'
+ * parameters:
+ * 	mount - the mount structure to release
+ * return value:
+ * 	none.
+ */
+void mnt_put(struct mount* mount)
+{
+	if( !mount ) return;
+	if( mount->m_refs == 0 ){
+		printk("%1V\nmnt_put: warning: mount reference count is going negative...\n");
+	}
+	mount->m_refs--;
+}
 
 /*
  * function: register_filesystem
@@ -104,15 +186,11 @@ void initialize_filesystem( void )
 	
 	register_filesystem(&testfs_type);
 	
-	// This block will test a REALLY simple, but I know it works,
+	// This block will test a REALLY simple vfs, but I know it works,
 	// and the output is just annoying now...
+	
 	/*
-	printk("vfs: mounting testfs to \"/\"...\n");
-	int result = sys_mount("", "/", "testfs", MF_RDONLY, NULL);
-	printk("vfs: mounting result: %i\n", result);
-	
 	const char* file_path = "/stupid/somefile.txt";
-	
 	printk("vfs: attempting to walk the path \"%s\"...\n", file_path);
 	struct dentry* dentry = walk_path(file_path, WP_DEFAULT);
 	printk("vfs: walk_path result: %p\n", dentry);
@@ -126,131 +204,140 @@ void initialize_filesystem( void )
 	
 }
 
-/*
- * function: walk_path_r
- * description:
- * 		walks the path from parent through path and returns the dentry there
- * 		WP_NOLINK will prevent walk_path_r from following symbolic links.
- * parameters:
- * 		path: a string representing the path to the directory entry
- * 		root: a pointer to the pointer to a dentry to start the search from
- * 			a double pointer is used so that root can be reassigned from
- * 			mounts and the references still get counted correctly.
- * 		flags: WP_* flags OR'd together
- * return value:
- * 		a dentry representing the path passed into the function. If the path could
- * 		not be followed, then an error value is returned and can be retrieved with
- * 		the PTR_ERR macro.
- * notes:
- * 		the path must not start with a '/'. This is an error. "./" is fine, because
- * 		"." is interpreted as "parent", and the search will continue. In the same
- * 		way, "../" is also fine and is interpreted as parent->d_parent.
- * 
- * 		walk_path_r is called recursively in order to continue following the path.
- */
-static struct dentry* walk_path_r(char* path, struct dentry** root, u32 flags)
+void copy_task_vfs(struct vfs* d, struct vfs* s)
 {
-	char			*slash = NULL;		// The pointer to the slash character from strchr
-	struct dentry		*child = NULL;		// the next entry we found
-	
-	// this is a mountpoint or a mount (either way, grab to topmost mount point for this position)
-	if( (*root)->d_mountpoint ){
-		struct mount* mount = list_entry(list_first(&(*root)->d_mountpoint->mp_mounts), struct mount, m_mplink);
-		d_put(*root);
-		*root = d_get(mount->m_super->s_root);
-	}
-	
-	// Check for ".", "..", "./*", "../*"
-	if( *path == '.' ){
-		if( *(path+1) == '/' ){
-			path += 2;
-		} else if( *(path+1) == '.' ){
-			if( *(path+2) == '/' ){
-				if( (*root)->d_parent == NULL ){
-					return ERR_PTR(-ENOENT);
-				}
-				path += 3;
-				struct dentry* newroot = (*root)->d_parent;
-				d_put(*root);
-				*root = newroot;
-			} else if( *(path+2) == '\0' ){
-				if( (*root)->d_parent == NULL ){
-					return ERR_PTR(-ENOENT);
-				}
-				return d_get((*root)->d_parent); // return another reference to the parent
-			}
-		} else if( *(path+1) == 0 ){
-			return d_get(*root);
-		}
-	}	
-
-	if( *path == 0 ){
-		return d_get(*root);
-	}
-	
-	// find the path deliminator
-	slash = strchr(path, '/');
-	
-	if( slash == NULL )
-	{
-		child = d_lookup(*root, path); // there's no slash, so just lookup the next item
-		return child;
-	}
-	
-	// lookup the new root of the search
-	*slash = 0; // remove the slash
-	child = d_lookup(*root, path); // path now points only to this entry
-	*slash = '/'; // replace the slash
-	if( IS_ERR(child) ){ // is this an error?
-		return child; // return the error
-	}
-	struct dentry* temp = walk_path_r(slash+1, &child, flags); // grab the next..next..next, so on...
-	d_put(child); // release our reference to the child entry
-	return temp;
-	
+	memset(d, 0, sizeof(struct vfs));
+	path_copy(&d->v_cwd, &s->v_cwd);
 }
 
-/*
- * function: walk_path
- * description:
- * 		decides whether to use the current path (held in the process structure) or
- * 		the root path (e.g. from vfs_root) then calls walk_path_r
- * parameters:
- * 		path: a string representing the path to the directory entry
- * 		flags: WP_* flags OR'd together
- * return value:
- * 		a dentry representing the path passed into the function. If the path could
- * 		not be followed, then an error value is returned and can be retrieved with
- * 		the PTR_ERR macro.
- * notes:
- * 		vfs_root is used as the current directory if '/' is the current character.
- * 		otherwise, current_task->cwd is used.
- */
-struct dentry* walk_path(const char* upath, u32 flags)
+void init_task_vfs(struct vfs* vfs)
 {
-	char			 path[512] = {0},		// the internal path array
-				*pPath = path;			// the path pointer
-	struct dentry		*root = NULL,			// where to start the search
-				*result = NULL;			// result from the path walk
+	memset(vfs, 0, sizeof(struct vfs));
+	vfs->v_cwd.p_dentry = d_get(vfs_root);
+	vfs->v_cwd.p_mount = NULL;
+}
+
+int path_lookup(const char* name, int flags, struct path* path)
+{
+	UNUSED(flags);
+	char			query[512];		// the internal path array
+	char			*iter = query;
+	char			*slash;
+	struct dentry		*child;
+	
+	if( strlen(name) > 511 ){
+		return -ENAMETOOLONG;
+	}
 	
 	// copy the user path to the internal path variable
-	strncpy(path, upath, 512);
+	strncpy(query, name, 512);
+	query[511] = 0;
 	
-	if( *pPath == '/' ){
-		root = d_get(vfs_root);
-		pPath++;
+	iter = query;
+	
+	if( iter[0] == '/' ){
+		path->p_dentry = d_get(vfs_root);
+		path->p_mount = NULL;
+		iter++;
 	} else {
-		//root = task_get_cwd(task_current());
-		root = d_get(vfs_root);
+		path_copy(path, &current->t_vfs.v_cwd);
 	}
 	
-	result = walk_path_r(pPath, &root, flags);
-	d_put(root);
+	while( 1 )
+	{
+		// this is a mountpoint or a mount (either way, grab to topmost mount point for this position)
+		if( path->p_dentry->d_mountpoint ){
+			struct mount* mount = list_entry(list_first(&path->p_dentry->d_mountpoint->mp_mounts), struct mount, m_mplink);
+			if( mount->m_super->s_root != path->p_dentry ) {
+				path_put(path);
+				path->p_dentry = d_get(mount->m_super->s_root);
+				path->p_mount = mnt_get(mount);
+			}
+		}
+		
+		// Check for ".", "..", "./*", "../*"
+		if( *iter == '.' ){
+			// Current directory, that's redundant
+			if( *(iter+1) == '/' ){
+				iter += 2;
+			} else if( *(iter+1) == '.' ){
+				// Previous directory
+				if( *(iter+2) == '/' ){
+					// NOTE Handle going up "through" a mount
+					// no previous directory
+					if( path->p_dentry->d_parent == NULL ){
+						path_put(path);
+						path->p_dentry = NULL;
+						return -ENOENT;
+					}
+					// Find the previous directory, and grab a reference to
+					iter += 3;
+					struct dentry* newroot = d_get(path->p_dentry->d_parent);
+					d_put(path->p_dentry); // just release the dentry, reuse the mount
+					path->p_dentry = newroot;
+				} else if( *(iter+2) == '\0' ){
+					// No previous directory
+					if( path->p_dentry->d_parent == NULL ){
+						path_put(path);
+						path->p_dentry = NULL;
+						return -ENOENT;
+					}
+					// they just wanted the parent
+					struct dentry* dentry = d_get(path->p_dentry->d_parent);
+					d_put(path->p_dentry); // just release the dentry, reuse the mount
+					path->p_dentry = dentry;
+					return 0;
+				}
+			} else if( *(iter+1) == 0 ){
+				// They just wanted the current directory entry
+				return 0;
+			}
+		} else if( *iter == 0 ){
+			// The query was empty: Same as "./"
+			return 0;
+		}
+		
+		// do we have search permissions?
+		if( path_access(path, X_OK) != 0 ){
+			path_put(path);
+			return -EACCES;
+		}
+		
+		// find the path deliminator
+		slash = strchr(iter, '/');
+		
+		// If there is no slash, then just grab the entry
+		// and return
+		if( slash == NULL )
+		{
+			struct dentry* dentry = path->p_dentry;
+			path->p_dentry = d_lookup(path->p_dentry, iter); // there's no slash, so just lookup the next item
+			d_put(dentry);
+			if( IS_ERR(path->p_dentry) ){
+				mnt_put(path->p_mount);
+				return PTR_ERR(path->p_dentry);
+			} else {
+				return 0;
+			}
+		}
+		
+		// lookup the new root of the search
+		*slash = 0; // remove the slash
+		child = d_lookup(path->p_dentry, iter); // iter is now a c string containing the next element
+		*slash = '/'; // replace the slash
+		if( IS_ERR(child) ){ // is this an error?
+			path_put(path);
+			path->p_dentry = NULL;
+			return PTR_ERR(child);
+		}
+		
+		// Reuse the mount
+		d_put(path->p_dentry);
+		path->p_dentry = child;
+	}
 	
-	return result;
+	return 0;
 }
-	
-
 
 /*
  * function: sys_mount
@@ -258,7 +345,7 @@ struct dentry* walk_path(const char* upath, u32 flags)
  * 		source_name: name of the source file (what to mount at target, if needed)
  * 		target_name: name of the target directory (where to mount the source)
  * 		filesystemtype: name of the filesystem registered with the kernel (e.g. ext2)
- * 		mountflags: MF_* values OR'd together, see sys/mount.h
+ * 		mountflags: MS_* values OR'd together, see sys/mount.h
  * 		data: filesystem specific data, interpreted by the driver (typically a string containing KEY=VALUE options)
  * return value:
  * 		integer value indicating success. A return value of zero indicates success
@@ -270,9 +357,9 @@ struct dentry* walk_path(const char* upath, u32 flags)
 int sys_mount(const char* source_name, const char* target_name, const char* filesystemtype,
 	      unsigned long mountflags, const void* data)
 {
-	struct dentry		*source = NULL,		// pointer to the source file (should be a device file)
-				*target = NULL,		// pointer to the target file (should be a directory)
-				*root = NULL;		// What we are mounting to target
+	struct path		source,			// pointer to the source file (should be a device file)
+				target;			// pointer to the target file (should be a directory)
+	struct dentry		*root = NULL;		// What we are mounting to target
 	struct filesystem	*filesystem = NULL;	// pointer to the file system type
 	int			 error = 0;		// error codes returned by various functions
 	dev_t			 device = 0;		// the device to send to the driver
@@ -283,32 +370,31 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	//UNUSED(source_name);
 	//UNUSED(filesystemtype);
 	// get the directory entries for the source and target
-	target = walk_path(target_name, WP_DEFAULT);
-	source = walk_path(source_name, WP_DEFAULT);
+	error = path_lookup(target_name, WP_DEFAULT, &target);
+	if(error != 0){
+		return error;
+	}
+	error = path_lookup(source_name, WP_DEFAULT, &source);
 	// find the filesystem pointer
 	filesystem = get_filesystem(filesystemtype);
 	
-	// is the target valid?
-	if( IS_ERR(target) ){
-		if( !IS_ERR(source) ) d_put(source);
-		return PTR_ERR(target);
-	}
 	// is the filesystem valid?
 	if( IS_ERR(filesystem) ){
-		d_put(target);
-		if( !IS_ERR(source) ) d_put(source);
+		path_put(&target);
+		if( error != 0 ) path_put(&source);
 		return PTR_ERR(filesystem);
 	}
-	// is the source valid (only if we require a source)
-	if( IS_ERR(source) && !(filesystem->fs_flags & FS_NODEV) ){
-		d_put(target);
-		return PTR_ERR(source);
+	// is source invalid, and does the filesystem need a source?
+	if( error != 0 && !(filesystem->fs_flags & FS_NODEV)){
+		path_put(&target);
+		return error;
 	}
+	// grab the device or release the source if needed
 	if( !(filesystem->fs_flags & FS_NODEV) ){
-		device = source->d_inode->i_dev;
-		d_put(source);
-	} else if( !IS_ERR(source) ){
-		d_put(source);
+		device = source.p_dentry->d_inode->i_dev;
+		path_put(&source);
+	} else if( error == 0 ){
+		path_put(&source);
 	}
 	
 	// make sure source isn't already mounted (or this filesystem isn't already mounted, if device is unneeded)
@@ -319,26 +405,26 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 		{
 			// does this mount also not require a device and use the same file system? BUSY!
 			if( item->m_super->s_dev == 0 && item->m_super->s_fs == filesystem ){
-				d_put(target); // release the target
+				path_put(&target); // release the target
 				return -EBUSY; // tell the caller that this filesystem is busy
 			}
-		// We are using a device. Does this device use the same device? BUSY!
+		// We are using a device. Does this mount use the same device? BUSY!
 		} else if( item->m_super->s_dev == device ){
-			d_put(target); // release the target
+			path_put(&target); // release the target
 			return -EBUSY; // tell the caller that this device is already used
 		}
 	}
 	
 	// don't allow mounting a read only filesystem as read/write
-	if( !(mountflags & MF_RDONLY) && (filesystem->fs_flags & FS_RDONLY) ){
-		d_put(target);
+	if( !(mountflags & MS_RDONLY) && (filesystem->fs_flags & FS_RDONLY) ){
+		path_put(&target);
 		return -EACCES;
 	}
 	
 	// allocate the super block
 	struct superblock* super = (struct superblock*)kmalloc(sizeof(struct superblock));
 	if(!super){
-		d_put(target);
+		path_put(&target);
 		return -ENOMEM;
 	}
 	memset(super, 0, sizeof(struct superblock));
@@ -349,7 +435,7 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	
 	// bad source/unable to load! :(
 	if( error < 0 ){
-		d_put(target);
+		path_put(&target);
 		kfree(super);
 		return error;
 	}
@@ -357,27 +443,27 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	root = super->s_root;
 	
 	// allocate a new mointpoint structure if needed
-	if( !target->d_mountpoint )
+	if( !target.p_dentry->d_mountpoint )
 	{
-		target->d_mountpoint = (struct mountpoint*)(kmalloc(sizeof(struct mountpoint)));
-		if(!target->d_mountpoint){
-			d_put(target);
+		target.p_dentry->d_mountpoint = (struct mountpoint*)(kmalloc(sizeof(struct mountpoint)));
+		if(!target.p_dentry->d_mountpoint){
+			path_put(&target);
 			filesystem_put_super(filesystem, super);
 			kfree(super);
 			return -ENOMEM;
 		}
-		memset(target->d_mountpoint, 0, sizeof(struct mountpoint));
-		target->d_mountpoint->mp_point = target;
-		INIT_LIST(&target->d_mountpoint->mp_mounts);
+		memset(target.p_dentry->d_mountpoint, 0, sizeof(struct mountpoint));
+		target.p_dentry->d_mountpoint->mp_point = d_get(target.p_dentry);
+		INIT_LIST(&target.p_dentry->d_mountpoint->mp_mounts);
 	}
 	
 	// link the root dentry to the mountpoint structure
-	root->d_mountpoint = target->d_mountpoint;
+	root->d_mountpoint = target.p_dentry->d_mountpoint;
 	
 	// create a new mount
 	struct mount* mount = (struct mount*)(kmalloc(sizeof(struct mount)));
 	if( !mount ){
-		d_put(target);
+		path_put(&target);
 		filesystem_put_super(filesystem, super);
 		kfree(super);
 		return -ENOMEM;
@@ -386,6 +472,7 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	mount->m_flags = mountflags;
 	mount->m_data  = data;
 	mount->m_point = root->d_mountpoint;
+	mount->m_refs = 1; // Initialize to 1 reference
 	INIT_LIST(&mount->m_mplink);
 	INIT_LIST(&mount->m_globlink);
 	
@@ -401,7 +488,7 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
  * function: sys_umount
  * parameters:
  * 		target_name: name of the directory where something is mounted
- * 		flags: MF_* values OR'd together; see sys/mount.h or the manpage
+ * 		flags: MS_* values OR'd together; see sys/mount.h or man 2 umount
  * return value:
  * 		An integer indicating success or failure. A zero return value
  * 		indicates success, while a negative number indicates error and
@@ -411,45 +498,738 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
  */
 int sys_umount(const char* target_name, int flags)
 {
-	struct dentry		*target = NULL; // the target directory entry
+	struct path		target; // the target directory entry
 	struct mount		*mount = NULL; // the mount for this target
-	struct filesystem	*filesystem = NULL; // the filesystem type that is mounted
+	struct mountpoint	*mountpoint = NULL; // mountpoint
 	struct superblock	*super = NULL; // the superblock that is mounted
+	int			result = 0;
 	UNUSED(flags);
 	
-	//UNUSED(target_name);
-	target = walk_path(target_name, WP_DEFAULT);
+	result = path_lookup(target_name, WP_DEFAULT, &target);
 	
-	if( IS_ERR(target) ){
-		return PTR_ERR(target);
+	// Was there a problem looking up the target?
+	if( result != 0 ){
+		return result;
 	}
 	
-	if( !target->d_mountpoint )
+	// This dentry should be the root of the mounted filesystem
+	if( target.p_dentry != target.p_mount->m_super->s_root )
 	{
-		d_put(target);
+		path_put(&target);
 		return -EINVAL;
 	}
 	
-	// that's peculiar, there shouldn't be a mount point structure allocated
-	if( list_empty(&target->d_mountpoint->mp_mounts) ){
-		kfree(target->d_mountpoint);
-		target->d_mountpoint = NULL;
-		d_put(target);
-		return -EINVAL;
-	}
-	
-	// Grab the top-most mount from the mount point mount list
-	mount = list_entry(&target->d_mountpoint->mp_mounts.next, struct mount, m_mplink);
+	// Grab the mount structure, and the superblock for reference
+	mount = target.p_mount;
 	super = mount->m_super;
-	filesystem = super->s_fs;
+	mountpoint = mount->m_point;
 	
+	// Release the path
+	path_put(&target);
 	
-	filesystem_put_super(filesystem, super);
+	// If it is not in use, m_refs should be 1 (the filesystem's reference)
+	// This means that nothing is open, and it is simply still mounted
+	if( mount->m_refs != 1 )
+	{
+		return -EBUSY;
+	}
+	
+	// The superblock still has the root node open, so there should be one reference
+	if( super->s_refs != 1 ){
+		return -EBUSY;
+	}
+	
+	result = super->s_fs->fs_ops->put_super(super->s_fs, super);
+	
+	if( result != 0 ){
+		return result;
+	}
+	
+	// Remove the mount from its lists
 	list_rem(&mount->m_mplink);
+	list_rem(&mount->m_globlink);
 	
+	// No more mounts at this mountpoint. Destroy it.
+	if( list_empty(&mountpoint->mp_mounts) )
+	{
+		mountpoint->mp_point->d_mountpoint = NULL;
+		d_put(mountpoint->mp_point);
+		kfree(mountpoint);
+	}
+	
+	// Free the mount and superblock
 	kfree(mount);
+	kfree(super);
+	
+	// We're done!
+	return 0;
+}
+
+/* function: create_file
+ * purpose:
+ * 	Create a new file. filename indicates the full path name
+ * 	of the new file.
+ * 
+ * 	Assumptions:
+ * 		- The file is already garunteed to NOT EXIST.
+ * 		- The file name is within the maximum length
+ * parameters:
+ * 	filename - the full path name of the new file
+ * 	mode - the file permission modes of the file
+ * 	path - if non-null, fill in the path structure after creating the file
+ * return value:
+ * 	Zero on success, or a negative error value for failure.
+ */
+int create_file(const char* filename, mode_t mode, struct path* filepath)
+{
+	// Grab the path, and the basename form the filename
+	char path_buf[512];
+	strcpy(path_buf, filename);
+	char* path = path_buf;
+	char* name = basename(path);
+	if( name != path ) *(name-1) = 0;
+	else path = (char*)"/";
+	
+	// Look up the containing directory
+	struct path dir;
+	int result = path_lookup(path, WP_DEFAULT, &dir);
+	if( result != 0 ){
+		return result;
+	}
+	
+	// Check for write permissions on the parent directory
+	result = path_access(&dir, W_OK);
+	if( result != 0 ){
+		path_put(&dir);
+		return result;
+	}
+	
+	// Check if the driver supports the creat function
+	if( !dir.p_dentry->d_inode->i_ops->creat ){
+		path_put(&dir);
+		return -EACCES;
+	}
+	
+	// Tell the filesystem to create the new file
+	result = dir.p_dentry->d_inode->i_ops->creat(dir.p_dentry->d_inode,\
+							name, mode,\
+							&filepath->p_dentry);
+	
+	// They are going to use the same mounts
+	filepath->p_mount = dir.p_mount;
+	
+	// Free the containing directory
+	path_put(&dir);
+	
+	// Return the result from the filesystem
+	return result;
+}
+
+int inode_trunc(struct inode* inode)
+{
+	if( !inode->i_ops->truncate ){
+		return -EACCES;
+	}
+	
+	return -inode->i_ops->truncate(inode);
+}
+
+int sys_open(const char* filename, int flags, mode_t mode)
+{
+	struct file* file = NULL;
+	int	fd = -1,
+		result = 0;
+	
+	// Find a free file descriptor
+	for(int i = 0; i < TASK_MAX_OPEN_FILES; i++){
+		if( !current->t_vfs.v_openvect[i].file ){
+			fd = i;
+			break;
+		}
+	}
+	if( fd == -1 ) return -EMFILE;
+	
+	// Allocate the file descriptor structure
+	file = (struct file*)kmalloc(sizeof(struct file));
+	if( !file ){
+		return -ENOMEM;
+	}
+	memset(file, 0, sizeof(struct file));
+	
+	// Locate the file in the directory tree
+	result = path_lookup(filename, WP_DEFAULT, &file->f_path);
+	if( result != 0 ){
+		// Create the file if needed
+		if( flags & O_CREAT )
+		{
+			// create a new regular file
+			result = create_file(filename, (mode & S_IFMT) | S_IFREG, &file->f_path);
+			if( result != 0 ){
+				kfree(file);
+				return result;
+			}
+		} else {
+			kfree(file);
+			return result;
+		}
+	} else if( flags & O_EXCL ){
+		path_put(&file->f_path);
+		kfree(file);
+		return -EEXIST;
+	}
+	
+	int access_mode = 0;
+	if( (flags+1) & _FWRITE ) access_mode |= W_OK;
+	if( (flags+1) & _FREAD ) access_mode |= R_OK;
+	
+	result = path_access(&file->f_path, access_mode);
+	if( result != 0 ){
+		path_put(&file->f_path);
+		kfree(file);
+		return result;
+	}
+	
+	if( !S_ISDIR(file->f_path.p_dentry->d_inode->i_mode) )
+	{
+		// We requested a directory, and this file isn't one.
+		/*if( (flags & O_DIRECTORY) ){
+			path_put(&file->f_path);
+			kfree(file);
+			return -ENOTDIR;
+		}*/
+	// We requested a writeable file, and this is a directory
+	} else if( (flags+1) & _FWRITE ){
+		path_put(&file->f_path);
+		kfree(file);
+		return -EISDIR;
+	}
+	
+	// FIXME I need to add O_CLOEXEC (and some others) to sys/fcntl.h instead of just using _default_fcntl.h from newlib!
+	//if( flags & O_CLOEXEC ) file->f_flags |= FD_CLOEXEC;
+	
+	// No follow was specified, and this is a symlink
+/*	if( flags & O_NOFOLLOW ){
+		if( S_ISLNK(file->f_path.p_dentry->d_inode->i_mode) )
+		{
+			path_put(&file->f_path);
+			kfree(file);
+			return -ELOOP;
+		}
+	}*/
+	
+	// Truncate the inode if allowed and requested
+	if( flags & O_TRUNC )
+	{
+		if( !((flags+1) & _FWRITE) ){
+			path_put(&file->f_path);
+			kfree(file);
+			return -EACCES;
+		} else {
+			inode_trunc(file->f_path.p_dentry->d_inode);
+		}
+	}
+	
+	file->f_ops = file->f_path.p_dentry->d_inode->i_default_fops;
+	file->f_status = flags;
+	
+	if( file->f_ops->open ){
+		result = file->f_ops->open(file, file->f_path.p_dentry, flags);
+		if( result != 0 ){
+			path_put(&file->f_path);
+			kfree(file);
+			return result;
+		}
+	}
+	
+	current->t_vfs.v_openvect[fd].file = file;
+	current->t_vfs.v_openvect[fd].flags = 0;
 	
 	return 0;
+}
+
+/* function: sys_close
+ * purpose:
+ * 	Close an open file descriptor.
+ * parameters:
+ * 	fd - an open file descriptor
+ * return values:
+ * 	Zero on success or a negative error on failure.
+ */
+int sys_close(int fd)
+{
+	if( current->t_vfs.v_openvect[fd].file == NULL )
+		return -EBADF;
+	
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	
+	if( file->f_ops->close ){
+		int result= file->f_ops->close(file, file->f_path.p_dentry);
+		if( result != 0 ){
+			return result;
+		}
+	}
+	
+	current->t_vfs.v_openvect[fd].file = NULL;
+	
+	// Decrease the reference count of the file description
+	if( --file->f_refs > 0 ) return 0;
+
+	// No more references, free the path and the file structure	
+	path_put(&file->f_path);
+	kfree(file);
+	
+	return 0;
+}
+
+/* function: sys_read
+ * purpose:
+ * 	read data from an open file descriptor
+ * parameters:
+ * 	fd - the open file descriptor
+ * 	buf - the buffer to read into
+ * 	count - the number of characters to read
+ * return value:
+ * 	the number of characters read from the file,
+ * 	or a negative error value.
+ */
+ssize_t sys_read(int fd, void* buf, size_t count)
+{
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	int omode = file->f_status;
+	
+	// Check for invalid file descriptor
+	if( !file ){
+		return -EBADF;
+	}
+	// Check for a file without reading permissions
+	if( !((omode+1) & _FREAD) ){
+		return -EINVAL;
+	}
+	
+	// Read isn't supported
+	if( !file->f_ops->read ){
+		return -EINVAL;
+	}
+	
+	return file->f_ops->read(file, (char*)buf, count);
+	
+}
+
+/* function: sys_write
+ * purpose:
+ * 	write data to an open file descriptor
+ * parameters:
+ * 	fd - the open file descriptor
+ * 	buf - the buffer to write to the file
+ * 	count - the number of bytes to write
+ * return value:
+ * 	the number of bytes actually written
+ * 	or a negative error value
+ */
+ssize_t sys_write(int fd, const void* buf, size_t count)
+{
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	int omode = file->f_status;
+	
+	// Check for invalid file descriptor
+	if( !file ){
+		return -EBADF;
+	}
+	// Check for a file without reading permissions
+	if( !((omode+1) & _FWRITE) ){
+		return -EINVAL;
+	}
+	
+	// Read isn't supported
+	if( !file->f_ops->read ){
+		return -EINVAL;
+	}
+	
+	off_t old_pos = file->f_off;
+	if( omode & O_APPEND ){
+		file->f_off = (off_t)file->f_path.p_dentry->d_inode->i_size;
+	}
+	
+	ssize_t result = file->f_ops->write(file, (const char*)buf, count);
+	
+	if( omode & O_APPEND ){
+		file->f_off = old_pos;
+	}
+	
+	return result;
+}
+
+/* function sys_lseek
+ * purpose:
+ * 	change the file position of an open file descriptor
+ * parameters:
+ * 	fd - the open file descriptor
+ * 	offset - an offset to seek to
+ * 	whence - the base of the offset (SEEK_SET, SEEK_END, SEEK_CUR)
+ * return value:
+ * 	the new offset from the beginning of the file
+ */
+off_t sys_lseek(int fd, off_t offset, int whence)
+{
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	
+	if( !file ){
+		return (off_t)-EBADF;
+	}
+	
+	// Just change the file offset if it is not implemented by the driver
+	if( !file->f_ops->lseek )
+	{
+		switch(whence)
+		{
+			case SEEK_SET:
+				file->f_off = offset;
+				break;
+			case SEEK_CUR:
+				file->f_off += offset;
+				break;
+			case SEEK_END:
+				file->f_off = (off_t)file->f_path.p_dentry->d_inode->i_size + offset;
+				break;
+			default:
+				return (off_t)-EINVAL;
+		}
+	} else {
+		return file->f_ops->lseek(file, offset, whence);
+	}
+	// We'll never get here
+	return 0;
+}
+
+int sys_dup(int old_fd)
+{
+	struct file* file = current->t_vfs.v_openvect[old_fd].file;
+	if( !file ){
+		return -EBADF;
+	}
+	
+	int new_fd = 0;
+	for(; new_fd < TASK_MAX_OPEN_FILES; new_fd++){
+		if( !current->t_vfs.v_openvect[new_fd].file ) break;
+	}
+	if( new_fd == TASK_MAX_OPEN_FILES ){
+		return -EMFILE;
+	}
+	
+	// Copy the file description
+	file->f_refs++;
+	current->t_vfs.v_openvect[new_fd].file = file;
+	current->t_vfs.v_openvect[new_fd].flags = 0;
+	
+	// Return the new file descriptor
+	return new_fd;
+}
+
+int sys_link(const char* old_path, const char* new_path)
+{
+	struct path oldp, newp;
+	int result = 0;
+	char new_parent[512];
+	
+	strcpy(new_parent, new_path);
+	// basename just returns the character after the last slash
+	char* new_base = basename(new_parent);
+	// Make that character a terminating character
+	*(new_base-1) = 0;
+	// temp is now the path to the parent, and new_base
+	// is the basename
+	
+	// Lookup the old item
+	result = path_lookup(old_path, WP_DEFAULT, &oldp);
+	if( result != 0 ){
+		return result;
+	}
+	// Lookup the new item's parent
+	result = path_lookup(new_parent, WP_DEFAULT, &newp);
+	if( result != 0 ){
+		return result;
+	}
+	
+	if( oldp.p_mount != newp.p_mount )
+	{
+		path_put(&oldp);
+		path_put(&newp);
+		return -EXDEV;
+	}
+	
+	if( newp.p_mount->m_flags & MS_RDONLY ){
+		path_put(&oldp);
+		path_put(&newp);
+		return -EROFS;
+	}
+	
+	if( !newp.p_dentry->d_inode->i_ops->link ) {
+		path_put(&oldp);
+		path_put(&newp);
+		return -EPERM;
+	}
+	
+	result = newp.p_dentry->d_inode->i_ops->link(newp.p_dentry->d_inode, new_base, oldp.p_dentry->d_inode);
+	
+	path_put(&newp);
+	path_put(&oldp);
+	
+	return result;
+}
+
+int sys_fstat(int fd, struct stat* st)
+{
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	if(!file){
+		return -EBADF;
+	}
+	struct inode* inode = file->f_path.p_dentry->d_inode;
+	
+	// If the driver doesn't provide fstat, try and
+	// mimic it with cached values in the inode.
+	if( !file->f_ops->fstat )
+	{
+		st->st_dev = inode->i_super->s_dev;
+		st->st_ino = inode->i_ino;
+		st->st_mode = inode->i_mode;
+		st->st_nlink = inode->i_nlinks;
+		st->st_uid = inode->i_uid;
+		st->st_gid = inode->i_gid;
+		st->st_rdev = inode->i_dev;
+		st->st_size = inode->i_size;
+		st->st_blksize = (long)inode->i_super->s_blocksize;
+		st->st_blocks = 0;
+		st->st_atime = inode->i_atime;
+		st->st_mtime = inode->i_mtime;
+		st->st_ctime = inode->i_ctime;
+	} else {
+		return file->f_ops->fstat(file, st);
+	}
+	
+	return 0;
+}
+
+int path_access(struct path* path, int mode)
+{
+	if( mode != F_OK && (mode & ~(X_OK|W_OK|R_OK)) != 0 ){
+		return -EINVAL;
+	}
+	
+	// ROOT IS GOD :D
+	if( current->t_uid == 0 ) return 0;
+	// The file obviously exists... we already parsed the path...
+	if( mode == F_OK ) return 0;
+	
+	struct inode* inode = path->p_dentry->d_inode;
+	
+	if( mode & W_OK )
+	{
+		if( path->p_mount->m_flags & MS_RDONLY ){
+			return -EACCES;
+		}
+		// Check the appropriate write bit
+		if( current->t_uid == inode->i_uid ){
+			if( !(inode->i_mode & S_IWUSR) )
+				return -EACCES;
+		} else if( current->t_gid == inode->i_gid ){
+			if( !(inode->i_mode & S_IWGRP) )
+				return -EACCES;
+		} else {
+			if( !(inode->i_mode & S_IWOTH) )
+				return -EACCES;
+		}
+	}
+	if( mode & R_OK )
+	{
+		if( current->t_uid == inode->i_uid ){
+			if( !(inode->i_mode & S_IRUSR) )
+				return -EACCES;
+		} else if( current->t_gid == inode->i_gid ){
+			if( !(inode->i_mode & S_IRGRP) )
+				return -EACCES;
+		} else {
+			if( !(inode->i_mode & S_IROTH) )
+				return -EACCES;
+		}
+	}
+	if( mode & X_OK )
+	{
+		if( path->p_mount->m_flags & MS_NOEXEC ){
+			return -EACCES;
+		}
+		if( current->t_uid == inode->i_uid ){
+			if( !(inode->i_mode & S_IXUSR) )
+				return -EACCES;
+		} else if( current->t_gid == inode->i_gid ){
+			if( !(inode->i_mode & S_IXGRP) )
+				return -EACCES;
+		} else {
+			if( !(inode->i_mode & S_IXOTH) )
+				return -EACCES;
+		}
+	}
+	
+	return 0;
+}
+
+int sys_access(const char* file, int mode)
+{
+	struct path path;
+	int result = 0;
+	
+	result = path_lookup(file, WP_DEFAULT, &path);
+	if( result != 0 ){
+		return result;
+	}
+	
+	result = path_access(&path, mode);
+	
+	path_put(&path);
+	
+	return result;
+}
+
+int sys_chmod(const char* file, mode_t mode)
+{
+	struct path path;
+	int result = 0;
+	
+	result = path_lookup(file, WP_DEFAULT, &path);
+	
+	if( result != 0 ){
+		return result;
+	}
+	
+	if( path.p_dentry->d_inode->i_ops->chmod ){
+		result = path.p_dentry->d_inode->i_ops->chmod(path.p_dentry->d_inode, mode);
+	} else {
+		result = 0;
+		// set only the modes we are aloud to set, and leave the file type/format bits
+		path.p_dentry->d_inode->i_mode &= S_IFMT;
+		path.p_dentry->d_inode->i_mode |= (mode & (mode_t)~S_IFMT);
+	}
+
+	path_put(&path);
+	
+	return result;
+}
+
+int sys_chown(const char* file, uid_t owner, gid_t group)
+{
+	struct path path;
+	int result = 0;
+	
+	if( owner != (uid_t)-1 && current->t_uid != 0 ){
+		return -EPERM;
+	}
+	
+	result = path_lookup(file, WP_DEFAULT, &path);
+	
+	if( result != 0 ){
+		return result;
+	}
+	
+	if( path.p_dentry->d_inode->i_ops->chown ){
+		result = path.p_dentry->d_inode->i_ops->chown(path.p_dentry->d_inode, owner, group);
+	} else {
+		result = 0;
+		// set only the modes we are aloud to set, and leave the file type/format bits
+		if( owner != (uid_t)-1 ) path.p_dentry->d_inode->i_uid = owner;
+		if( group != (gid_t)-1 ) path.p_dentry->d_inode->i_gid = group;
+	}
+
+	path_put(&path);
+	
+	return result;
+}
+
+mode_t sys_umask(mode_t mask)
+{
+	mode_t old = current->t_umask;
+	current->t_umask = mask;
+	return old;
+}
+
+/* function: basename
+ * purpose:
+ * 	retrieve the last component in a file path.
+ * 	e.g. /x/y/z/somefile.txt would return somefile.txt
+ * 	trailing slashes are significant, so /x/y/z/ will
+ * 	return an empty string.
+ * parameters:
+ * 	path - the full name or path of the file/directory
+ * return value:
+ * 	the base name of the file (last component).
+ */
+char* basename(const char* path)
+{
+	char* slash = NULL,
+		*tmp = NULL;
+	tmp = (char*)path;
+	while( tmp ){
+		slash = tmp;
+		tmp = strchr(slash, '/');
+	}
+	// slash is a pointer to the last slash, add one
+	return slash+1;
+}
+
+/* function: sys_ioctl
+ * purpose:
+ * 	adjust device parameters of an open file descriptor
+ * parameters:
+ * 	fd - the open file descriptor
+ * 	request - the request/command for the device
+ * 	argp - device/request specific arguments
+ * return value:
+ * 	Normally zero on success or a negative error value.
+ * 	But the real result depends on the device driver and
+ * 	request/command.
+ */
+int sys_ioctl(int fd, int request, char* argp)
+{
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	
+	if( !file ){
+		return -EBADF;
+	}
+	
+	// ioctl is not supported by this device
+	if( file->f_ops->ioctl == NULL ){
+		return -EINVAL;
+	}
+	
+	return file->f_ops->ioctl(file, request, argp);
+}
+
+/* function: super_get
+ * purpose:
+ * 	increase the reference count of an open superblock
+ * parameters:
+ * 	super - the superblock
+ * return value:
+ * 	The superblock with an increased reference count
+ */
+struct superblock* super_get(struct superblock* super)
+{
+	super->s_refs++;
+	return super;
+}
+
+/* function: super_put
+ * purpose:
+ * 	decrease the reference count of an open superblock
+ * parameters:
+ * 	super - the superblock
+ * return value:
+ * 	none.
+ */
+void super_put(struct superblock* super)
+{
+	if( super->s_refs == 0 ){
+		printk("%1Vsuper_put: warning: superblock reference count going negative.\n");
+	}
+	super->s_refs--;
 }
 
 /*
@@ -475,7 +1255,7 @@ struct inode* i_get(struct superblock* super, ino_t ino)
 	
 	// fill in the information we know
 	inode->i_ino = ino;
-	inode->i_super = super;
+	inode->i_super = super_get(super);
 	inode->i_ref = 1;
 	INIT_LIST(&inode->i_sblink);
 	INIT_LIST(&inode->i_dentries);
@@ -531,6 +1311,7 @@ void i_free(struct inode* inode)
 		inode->i_super->s_ops->put_inode(inode->i_super, inode);
 	}
 	list_rem(&inode->i_sblink);
+	super_put(inode->i_super);
 	kfree(inode);
 }
 

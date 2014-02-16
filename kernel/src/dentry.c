@@ -95,7 +95,7 @@ struct dentry* d_alloc_root(struct inode* inode)
 		return root;
 	}
 	
-	root->d_inode = inode;
+	root->d_inode = i_getref(inode);
 	root->d_ino = inode->i_ino;
 	root->d_uid = inode->i_uid;
 	root->d_gid = inode->i_gid;

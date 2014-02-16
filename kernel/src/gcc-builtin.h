@@ -8,6 +8,7 @@ static inline int strcmp( const char* s1, const char* s2)
 		// the end of the string.
 		if( *s1 != *s2 ) return (*s1 - *s2);
 		else if( *s1 == 0 ) return 0;
+		s1++; s2++;
 	}
 	return 0;
 }
@@ -44,6 +45,14 @@ static inline char* strchr( const char* str, int character )
 	return (char*)0;
 }
 
-
+static inline size_t strlen( const char* s )
+{
+	size_t len = 0;
+	while(*s){
+		len++;
+		s++;
+	}
+	return len;
+}
 
 #endif

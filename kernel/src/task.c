@@ -8,6 +8,19 @@ list_t			task_globlist;		// global list of all tasks
 //struct task		*ready_tasks;		// list of ready tasks
 pid_t			next_pid = 0;		// the next process id
 
+/* function: sys_getpid
+ * purpose:
+ * 	retrieve the current process identifier
+ * parameters:
+ * 	none.
+ * return value:
+ * 	the current process identifier
+ */
+pid_t sys_getpid( void )
+{
+	return current->t_pid;
+}
+
 /* function: task_init
  * purpose:
  * 	initialize the tasking structure and initial task
@@ -54,6 +67,8 @@ void task_init( void )
 	//while(1);
 	// we are still using kerndir up to now
 	switch_page_dir(init->t_dir);
+	
+	init_task_vfs(&init->t_vfs);
 	
 	
 	// allocate the kernel stack
@@ -218,10 +233,11 @@ void task_kill(struct task* dead)
 		return;
 	}
 	
+	// While this isn't ideal, it will stop doing this once the child exits... it should probably be removed from the ready queue, though!
 	if( !list_empty(&dead->t_children) )
 	{
-		debug_message("warning: unable to kill parent task with running children!", 0);
-		debug_message("\ttask %d is not killed, but is not running either.", dead->t_pid);
+		//debug_message("warning: unable to kill parent task with running children!", 0);
+		//debug_message("\ttask %d is not killed, but is not running either.", dead->t_pid);
 		return;
 	}
 	
@@ -229,6 +245,8 @@ void task_kill(struct task* dead)
 	
 	// remove the task from the running queue
 	list_rem(&dead->t_queue);
+	list_rem(&dead->t_sibling);
+	list_rem(&dead->t_globlink);
 	dead->t_flags = TF_ZOMBIE;
 	
 	// we haven't implemented this yet...
@@ -316,6 +334,8 @@ int sys_fork( void )
 	INIT_LIST(&task->t_sibling);
 	INIT_LIST(&task->t_queue);
 	INIT_LIST(&task->t_globlink);
+	
+	copy_task_vfs(&task->t_vfs, &current->t_vfs);
 
 	// copy the page directory
 	task->t_dir = copy_page_dir(current->t_dir);
@@ -347,7 +367,7 @@ int sys_fork( void )
 	list_add(&task->t_sibling, &current->t_children);
 	list_add(&task->t_globlink, &task_globlist);
 	
-	task->t_eflags = eflags;
+	task->t_eflags = eflags & ~0x100;
 	
 	// the task is ready to run
 	// and the parent will give up its timeslice
