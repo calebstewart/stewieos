@@ -65,12 +65,15 @@ static void gdt_set_gate(int n, u32 base, u32 limit, u8 access, u8 gran)
 void debug_interrupt(struct regs* regs);
 void debug_interrupt(struct regs* regs)
 {
+	regs->eflags &= ~0x100;
+	return;
 	u32 dr6 = 0;
 	asm volatile ("movl %%dr6,%0" : "=r"(dr6));
 	printk("%1VDebugging Exception!\n");
 	printk("%1VInstruction Pointer: 0x%X\n", regs->eip);
 	printk("%1VEFLAGS: 0x%X\n", regs->eflags);
 	printk("%1VDR6: 0x%X\n", dr6);
+	u32 eflags = 0;
 	asm volatile ("hlt");
 }
 

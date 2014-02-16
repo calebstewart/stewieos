@@ -215,12 +215,22 @@ static struct header* heap_find_hole(size_t size, int align)
 		if(new_head == NULL){
 			continue;
 		}
+
 		// we're now aligned if needed, lets try and free some space if possible
 		heap_split_block(new_head, size);
 		// we have a good block now!
 		return new_head;
 	}
-	return heap_expand(size);
+	while( 1 )
+	{
+		struct header* head = heap_expand(size);
+		struct header* new_head = heap_align_block(head, size, align);
+		if( new_head == NULL ){
+			continue;
+		}
+		heap_split_block(new_head, size);
+		return new_head;
+	}
 }
 
 static void heap_insert_hole(struct header* header)

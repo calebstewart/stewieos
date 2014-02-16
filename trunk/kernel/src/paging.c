@@ -298,6 +298,10 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 		printk("%2Vcopy_page_dir: unable to allocate new directory!\n");
 		return NULL;
 	}
+	if( ((u32)dst) & 0xFFF ){
+		printk("%2Verror: page directory not page aligned!\n");
+		while(1);
+	}
 	memset((char*)dst + 0x1000, 0, 0x1004);
 	memset(dst, 0, 0x1000);
 	//memset(dst, 0, sizeof(page_dir_t));

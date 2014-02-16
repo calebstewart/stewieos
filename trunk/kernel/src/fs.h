@@ -13,6 +13,7 @@
 
 // walk_path flags
 #define WP_DEFAULT		0x00000000
+#define WP_PARENT		0x00000001
 
 #define filesystem_put_super(fs, super)		do{ if( (fs)->fs_ops->put_super ) (fs)->fs_ops->put_super((fs),super); } while(0)
 
@@ -36,11 +37,16 @@ struct inode_operations
 	// Working with children
 	int(*lookup)(struct inode*, struct dentry*);
 	// Creating children (only for inodes representing a directory)
-	int(*creat)(struct inode*, const char*, mode_t);
+	int(*creat)(struct inode*, const char*, mode_t, struct dentry** dentry);
 	int(*mknod)(struct inode*, const char*, mode_t, dev_t);
 	int(*mkdir)(struct inode*, const char*, mode_t);
+	int(*link)(struct inode*, const char*, struct inode*);
 	// Deleting self
 	int(*unlink)(struct inode*);
+	
+	int(*chmod)(struct inode*, mode_t);
+	int(*chown)(struct inode*, uid_t, gid_t);
+	int(*truncate)(struct inode*);
 };
 
 /* type: struct file_operations
@@ -51,9 +57,12 @@ struct file_operations
 {
 	int(*open)(struct file*, struct dentry*, int);
 	int(*close)(struct file*, struct dentry*);
-	size_t(*read)(struct file*, char*, size_t);
-	size_t(*write)(struct file*, const char*, size_t);
+	ssize_t(*read)(struct file*, char*, size_t);
+	ssize_t(*write)(struct file*, const char*, size_t);
 	int(*readdir)(struct file*, struct dirent*);
+	off_t(*lseek)(struct file*, off_t, int);
+	int(*ioctl)(struct file*, int, char*);
+	int(*fstat)(struct file*, struct stat*);
 };
 
 /* type: struct filesystem_operations
@@ -63,7 +72,7 @@ struct file_operations
 struct filesystem_operations
 {
 	int(*read_super)(struct filesystem*,struct superblock*, dev_t, unsigned long);
-	void(*put_super)(struct filesystem*, struct superblock*);
+	int(*put_super)(struct filesystem*, struct superblock*);
 };
 
 /* type: struct superblock_operations
@@ -148,6 +157,7 @@ struct superblock
 	dev_t				s_dev;			// device file this superblock was read from (if any, or 0 if no device is needed)
 	void*				s_private;		// private data for the filesystem driver
 	// record keeping and system data
+	u32				s_refs;			// Reference counter for the superblock
 	struct filesystem*		s_fs;			// The file system this superblock belongs to
 	struct dentry*			s_root;			// The root directory entry (usually ino=0)
 	list_t				s_inode_list;		// list of inodes associated with this superblock
@@ -166,7 +176,7 @@ struct inode
 	// Inode data
 	mode_t				i_mode;			// Indicates format of the file and its access rights
 	uid_t				i_uid;			// User ID associated with this file
-	size_t				i_size;			// Size of (regular) the file in bytes
+	off_t				i_size;			// Size of (regular) the file in bytes
 	time_t				i_atime,		// seconds representing the last time this inode was accessed
 					i_ctime,		// seconds representing when the inode was created
 					i_mtime,		// seconds representing when the inode was modified
@@ -184,6 +194,18 @@ struct inode
 	struct file_operations*		i_default_fops;		// Default file operations for this inode
 };
 
+/* type: struct path
+ * purpose:
+ * 	Holds the path information for a dentry.
+ * 	This includes the mount point and the
+ * 	dentry itself.
+ */
+struct path
+{
+	struct dentry*			p_dentry;		// The dentry pointer
+	struct mount*			p_mount;		// The mount point
+};
+
 /* type: struct mount
  * purpose:
  * 	holds information on a mount target including
@@ -197,6 +219,7 @@ struct mount
 	unsigned long			m_flags;		// the flags for this mount
 	const void*			m_data;			// filesystem specific options passed to mount
 	struct mountpoint*		m_point;		// the mount structure we belong to
+	u32				m_refs;			// Reference Counter
 	list_t				m_mplink;		// the link in the mount point list
 	list_t				m_globlink;		// global mount list link
 };
@@ -224,11 +247,36 @@ struct mountpoint
  */
 struct file
 {
-	struct dentry*			f_dentry;		// The directory entry this file is connected to
+	//struct dentry*			f_dentry;		// The directory entry this file is connected to
+	struct path			f_path;			// The path to the file we have open
 	struct file_operations*		f_ops;			// The operations structure (either from the device type list or f_dentry->d_inode->i_default_fops)
 	off_t				f_off;			// The offset into the file to read/write
-	int				f_flags;		// The current flags (including open flags and states)
+	int				f_status;		// The current flags (including open flags and states)
+	int				f_refs;			// Number of file references
 	struct file_lock*		f_lock;			// A file lock (NULL if unlocked)
+	void*				f_private;		// Private driver data
+};
+
+/* type: struct file_descr
+ * purpose:
+ * 	file descriptor structure
+ */
+struct file_descr
+{
+	struct file* file;
+	int flags;
+};
+
+/* type: struct vfs
+ * purpose:
+ * 	encapsulates the virtual file system state
+ * 	of a process including current working
+ * 	directory and open files array.
+ */
+struct vfs
+{
+	struct path v_cwd;					// Current Working Directory
+	struct file_descr v_openvect[1024];			// The open file vector
 };
 
 void initialize_filesystem( void );				// setup the filesystem for boot
@@ -242,10 +290,57 @@ struct inode*	i_getref(struct inode* inode);			// get a reference to an inode
 struct inode*	i_get(struct superblock* super, ino_t ino);	// get an inode from the superblock
 void		i_put(struct inode* inode);			// release a reference to an inode (possible free)
 
-struct dentry* walk_path(const char* path, u32 flags);		// walk the path and return the dentry which path refers to
+char* basename(const char * path);
 
+int path_lookup(const char* name, int flags,\
+		struct path* path);				// Lookup an entry in the file system
+
+struct mount* mnt_get(struct mount* mount);
+void mnt_put(struct mount* mount);
+
+struct superblock* super_get(struct superblock* super);
+void super_put(struct superblock* super);
+
+// Truncate an inode
+int inode_trunc(struct inode* inode);
+// Create a new file and optionally return its path
+int create_file(const char* name, mode_t mode, struct path* path);
+
+// exactly the same as sys_access but takes a path structure
+int path_access(struct path* path, int mode);
+// Release references to containing structures
+// There is no path_get, because there is no reference
+// counting for path. You should not keep path pointers
+// laying around that you did not create yourself. You
+// can copy their contents, though.
+void path_put(struct path* path);
+void path_copy(struct path* dst, struct path* src);
+
+/* Unix System Call Definitions
+ * 
+ * For more information about a sys_* routine, see the syscall manual entry
+ * with "man 2 routine_name" where routine name is the function without
+ * "sys_".
+ */
 int sys_mount(const char* source, const char* target,
 	      const char* filesystemtype, unsigned long mountflags, const void* data);
 int sys_umount(const char* target, int flags);
+int sys_open(const char* filename, int flags, mode_t mode);
+int sys_close(int fd);
+ssize_t sys_read(int fd, void* buf, size_t count);
+ssize_t sys_write(int fd, const void* buf, size_t count);
+off_t sys_lseek(int fd, off_t offset, int whence);
+int sys_ioctl(int fd, int request, char* argp);
+int sys_creat(const char* pathname, mode_t mode);
+int sys_dup(int oldfd);
+int sys_link(const char* oldpath, const char* newpath);
+int sys_fstat(int fd, struct stat* buf);
+int sys_access(const char* file, int mode);
+int sys_chmod(const char* file, mode_t mode);
+int sys_chown(const char* path, uid_t owner, gid_t group);
+mode_t sys_umask(mode_t mask);
+
+void copy_task_vfs(struct vfs* dest, struct vfs* src);
+void init_task_vfs(struct vfs* vfs);
 
 #endif
