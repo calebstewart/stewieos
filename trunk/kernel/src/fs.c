@@ -429,9 +429,12 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	}
 	memset(super, 0, sizeof(struct superblock));
 	
+	INIT_LIST(&super->s_inode_list);
+	INIT_LIST(&super->s_dentry_list);
+	
 	// read the superblock
 	super->s_fs = filesystem;
-	error = filesystem->fs_ops->read_super(filesystem, super, device, mountflags);
+	error = filesystem->fs_ops->read_super(filesystem, super, device, mountflags, (void*)data);
 	
 	// bad source/unable to load! :(
 	if( error < 0 ){
@@ -613,16 +616,21 @@ int create_file(const char* filename, mode_t mode, struct path* filepath)
 	// Tell the filesystem to create the new file
 	result = dir.p_dentry->d_inode->i_ops->creat(dir.p_dentry->d_inode,\
 							name, mode,\
-							&filepath->p_dentry);
-	
-	// They are going to use the same mounts
-	filepath->p_mount = dir.p_mount;
+							filepath);
 	
 	// Free the containing directory
 	path_put(&dir);
 	
 	// Return the result from the filesystem
 	return result;
+}
+
+int sys_mknod(const char* path, mode_t mode, dev_t dev)
+{
+	UNUSED(path);
+	UNUSED(mode);
+	UNUSED(dev);
+	return 0;
 }
 
 int inode_trunc(struct inode* inode)
@@ -636,7 +644,7 @@ int inode_trunc(struct inode* inode)
 
 int sys_open(const char* filename, int flags, mode_t mode)
 {
-	struct file* file = NULL;
+	struct path path;
 	int	fd = -1,
 		result = 0;
 	
@@ -647,104 +655,42 @@ int sys_open(const char* filename, int flags, mode_t mode)
 			break;
 		}
 	}
+	// No free file descriptors
 	if( fd == -1 ) return -EMFILE;
 	
-	// Allocate the file descriptor structure
-	file = (struct file*)kmalloc(sizeof(struct file));
-	if( !file ){
-		return -ENOMEM;
-	}
-	memset(file, 0, sizeof(struct file));
-	
 	// Locate the file in the directory tree
-	result = path_lookup(filename, WP_DEFAULT, &file->f_path);
+	result = path_lookup(filename, WP_DEFAULT, &path);
 	if( result != 0 ){
 		// Create the file if needed
 		if( flags & O_CREAT )
 		{
 			// create a new regular file
-			result = create_file(filename, (mode & S_IFMT) | S_IFREG, &file->f_path);
+			result = create_file(filename, (mode & S_IFMT) | S_IFREG, &path);
 			if( result != 0 ){
-				kfree(file);
 				return result;
 			}
-		} else {
-			kfree(file);
+		} else { // the file doesn't exist and we don't want to create it
 			return result;
 		}
+	// we want a new file, not an existing one
 	} else if( flags & O_EXCL ){
-		path_put(&file->f_path);
-		kfree(file);
+		path_put(&path);
 		return -EEXIST;
 	}
 	
-	int access_mode = 0;
-	if( (flags+1) & _FWRITE ) access_mode |= W_OK;
-	if( (flags+1) & _FREAD ) access_mode |= R_OK;
+	// Open the path as a file, and release our path reference
+	current->t_vfs.v_openvect[fd].file = file_open(&path, flags);
+	current->t_vfs.v_openvect[fd].flags = 0;
+	path_put(&path);
 	
-	result = path_access(&file->f_path, access_mode);
-	if( result != 0 ){
-		path_put(&file->f_path);
-		kfree(file);
+	// There was an error opening the file
+	if( IS_ERR(current->t_vfs.v_openvect[fd].file) ){
+		result = PTR_ERR(current->t_vfs.v_openvect[fd].file);
+		current->t_vfs.v_openvect[fd].file = NULL;
 		return result;
 	}
 	
-	if( !S_ISDIR(file->f_path.p_dentry->d_inode->i_mode) )
-	{
-		// We requested a directory, and this file isn't one.
-		/*if( (flags & O_DIRECTORY) ){
-			path_put(&file->f_path);
-			kfree(file);
-			return -ENOTDIR;
-		}*/
-	// We requested a writeable file, and this is a directory
-	} else if( (flags+1) & _FWRITE ){
-		path_put(&file->f_path);
-		kfree(file);
-		return -EISDIR;
-	}
-	
-	// FIXME I need to add O_CLOEXEC (and some others) to sys/fcntl.h instead of just using _default_fcntl.h from newlib!
-	//if( flags & O_CLOEXEC ) file->f_flags |= FD_CLOEXEC;
-	
-	// No follow was specified, and this is a symlink
-/*	if( flags & O_NOFOLLOW ){
-		if( S_ISLNK(file->f_path.p_dentry->d_inode->i_mode) )
-		{
-			path_put(&file->f_path);
-			kfree(file);
-			return -ELOOP;
-		}
-	}*/
-	
-	// Truncate the inode if allowed and requested
-	if( flags & O_TRUNC )
-	{
-		if( !((flags+1) & _FWRITE) ){
-			path_put(&file->f_path);
-			kfree(file);
-			return -EACCES;
-		} else {
-			inode_trunc(file->f_path.p_dentry->d_inode);
-		}
-	}
-	
-	file->f_ops = file->f_path.p_dentry->d_inode->i_default_fops;
-	file->f_status = flags;
-	
-	if( file->f_ops->open ){
-		result = file->f_ops->open(file, file->f_path.p_dentry, flags);
-		if( result != 0 ){
-			path_put(&file->f_path);
-			kfree(file);
-			return result;
-		}
-	}
-	
-	current->t_vfs.v_openvect[fd].file = file;
-	current->t_vfs.v_openvect[fd].flags = 0;
-	
-	return 0;
+	return fd;
 }
 
 /* function: sys_close
@@ -762,23 +708,9 @@ int sys_close(int fd)
 	
 	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
-	if( file->f_ops->close ){
-		int result= file->f_ops->close(file, file->f_path.p_dentry);
-		if( result != 0 ){
-			return result;
-		}
-	}
-	
 	current->t_vfs.v_openvect[fd].file = NULL;
 	
-	// Decrease the reference count of the file description
-	if( --file->f_refs > 0 ) return 0;
-
-	// No more references, free the path and the file structure	
-	path_put(&file->f_path);
-	kfree(file);
-	
-	return 0;
+	return file_close(file);
 }
 
 /* function: sys_read
@@ -795,24 +727,14 @@ int sys_close(int fd)
 ssize_t sys_read(int fd, void* buf, size_t count)
 {
 	struct file* file = current->t_vfs.v_openvect[fd].file;
-	int omode = file->f_status;
+	//int omode = file->f_status;
 	
 	// Check for invalid file descriptor
 	if( !file ){
 		return -EBADF;
 	}
-	// Check for a file without reading permissions
-	if( !((omode+1) & _FREAD) ){
-		return -EINVAL;
-	}
 	
-	// Read isn't supported
-	if( !file->f_ops->read ){
-		return -EINVAL;
-	}
-	
-	return file->f_ops->read(file, (char*)buf, count);
-	
+	return file_read(file, buf, count);
 }
 
 /* function: sys_write
@@ -829,34 +751,14 @@ ssize_t sys_read(int fd, void* buf, size_t count)
 ssize_t sys_write(int fd, const void* buf, size_t count)
 {
 	struct file* file = current->t_vfs.v_openvect[fd].file;
-	int omode = file->f_status;
+//	int omode = file->f_status;
 	
 	// Check for invalid file descriptor
 	if( !file ){
 		return -EBADF;
 	}
-	// Check for a file without reading permissions
-	if( !((omode+1) & _FWRITE) ){
-		return -EINVAL;
-	}
 	
-	// Read isn't supported
-	if( !file->f_ops->read ){
-		return -EINVAL;
-	}
-	
-	off_t old_pos = file->f_off;
-	if( omode & O_APPEND ){
-		file->f_off = (off_t)file->f_path.p_dentry->d_inode->i_size;
-	}
-	
-	ssize_t result = file->f_ops->write(file, (const char*)buf, count);
-	
-	if( omode & O_APPEND ){
-		file->f_off = old_pos;
-	}
-	
-	return result;
+	return file_write(file, buf, count);
 }
 
 /* function sys_lseek
@@ -877,28 +779,7 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 		return (off_t)-EBADF;
 	}
 	
-	// Just change the file offset if it is not implemented by the driver
-	if( !file->f_ops->lseek )
-	{
-		switch(whence)
-		{
-			case SEEK_SET:
-				file->f_off = offset;
-				break;
-			case SEEK_CUR:
-				file->f_off += offset;
-				break;
-			case SEEK_END:
-				file->f_off = (off_t)file->f_path.p_dentry->d_inode->i_size + offset;
-				break;
-			default:
-				return (off_t)-EINVAL;
-		}
-	} else {
-		return file->f_ops->lseek(file, offset, whence);
-	}
-	// We'll never get here
-	return 0;
+	return file_seek(file, offset, whence);
 }
 
 int sys_dup(int old_fd)
@@ -983,30 +864,8 @@ int sys_fstat(int fd, struct stat* st)
 	if(!file){
 		return -EBADF;
 	}
-	struct inode* inode = file->f_path.p_dentry->d_inode;
 	
-	// If the driver doesn't provide fstat, try and
-	// mimic it with cached values in the inode.
-	if( !file->f_ops->fstat )
-	{
-		st->st_dev = inode->i_super->s_dev;
-		st->st_ino = inode->i_ino;
-		st->st_mode = inode->i_mode;
-		st->st_nlink = inode->i_nlinks;
-		st->st_uid = inode->i_uid;
-		st->st_gid = inode->i_gid;
-		st->st_rdev = inode->i_dev;
-		st->st_size = inode->i_size;
-		st->st_blksize = (long)inode->i_super->s_blocksize;
-		st->st_blocks = 0;
-		st->st_atime = inode->i_atime;
-		st->st_mtime = inode->i_mtime;
-		st->st_ctime = inode->i_ctime;
-	} else {
-		return file->f_ops->fstat(file, st);
-	}
-	
-	return 0;
+	return file_stat(file, st);
 }
 
 int path_access(struct path* path, int mode)
@@ -1194,12 +1053,7 @@ int sys_ioctl(int fd, int request, char* argp)
 		return -EBADF;
 	}
 	
-	// ioctl is not supported by this device
-	if( file->f_ops->ioctl == NULL ){
-		return -EINVAL;
-	}
-	
-	return file->f_ops->ioctl(file, request, argp);
+	return file_ioctl(file, request, argp);
 }
 
 /* function: super_get

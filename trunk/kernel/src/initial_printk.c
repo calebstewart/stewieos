@@ -36,7 +36,7 @@ static char output_level_colors[3] = {
 	0x04,				// Output level 3, Red on black
 };
 
-int(*printk)(const char*,...) = initial_printk;
+int(*internal_printk)(const char*,__builtin_va_list) = initial_printk;
 
 static void put_char(char c, int flags, int width, int precision);				// puts a character to the screen
 static int put_str(const char* s, int flags, int width, int precision);				// put a string to the the screen
@@ -45,6 +45,17 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 void clear_screen( void );									// clear the screen
 static void update_cursor( void );								// synchronize the software cursor with the hardware (visual) one.
 static void scroll_screen(int count);								// Scroll count lines upwards
+
+void set_cursor_pos(unsigned int pos);
+
+int printk(const char* fmt, ...)
+{
+	__builtin_va_list ap;
+	__builtin_va_start(ap, fmt);
+	int result = internal_printk(fmt, ap);
+	update_cursor();
+	return result;
+}
 
 /* function: put_int
  * params:
@@ -214,7 +225,7 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 }
 
 /* The initial printk function to print to the VGA console buffer */
-int initial_printk(const char* format, ...)
+int initial_printk(const char* format, __builtin_va_list ap)
 {
 	int count = 0;
 	int flags = 0;
@@ -224,8 +235,8 @@ int initial_printk(const char* format, ...)
 	char length = 0;
 	char specifier = 0;
 	char original_color = monitor.color;
-	__builtin_va_list ap;
-	__builtin_va_start(ap, format);
+	//__builtin_va_list ap;
+	//__builtin_va_start(ap, format);
 	
 	while(*format){
 		
@@ -365,7 +376,7 @@ int initial_printk(const char* format, ...)
 complete:
 	// Reset the text color, and update the hardware cursor
 	monitor.color = original_color;
-	update_cursor();
+	//update_cursor();
 	return count;
 }
 
@@ -430,6 +441,55 @@ static void put_char(char c, int flags, int width, int precision)
 	} // end monitor.cx == monitor.width
 	
 } // end put_char
+
+/* function: cursor_pos
+ * params:
+ * 	none
+ * purpose:
+ * 	Retrieve the current cursor as (x + y*width)
+ */
+unsigned int get_cursor_pos(void )
+{
+	return monitor.cx + monitor.cy*monitor.width;
+}
+
+/* function: set_cursor_pos
+ * params:
+ * 	idx: the cursor position as (x+y*width)
+ * purpose:
+ * 	set the cursor position
+ * note:
+ * 	Does not update the hardware cursor.
+ */
+void set_cursor_pos(unsigned int idx)
+{
+	monitor.cx = idx % monitor.width;
+	monitor.cy = (unsigned int)(idx / monitor.width);
+}
+
+/* function: printk_at
+ * parames:
+ * 	pos - the cursor position as the function pos=x+y*monitor_width
+ *	fmt - same as printk
+ * 	... - same as printk
+ * returns:
+ *	same as printk
+ */
+int printk_at(unsigned int pos, const char* fmt, ...)
+{
+	unsigned int old_pos = get_cursor_pos();
+	set_cursor_pos(pos);
+	
+	__builtin_va_list ap;
+	__builtin_va_start(ap, fmt);
+	
+	int result = internal_printk(fmt, ap);
+	
+	set_cursor_pos(old_pos);
+	update_cursor();
+	
+	return result;
+}
 
 /* function: clear_screen
  * params:

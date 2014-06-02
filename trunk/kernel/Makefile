@@ -4,15 +4,15 @@ ASMFILES:=$(shell find $(PROJDIRS) -type f -name "*.s")
 SRCFILES:= $(CFILES) $(ASMFILES)
 OBJFILES:= $(CFILES:.c=.o) $(ASMFILES:.s=.s.o)
 
-WARNINGS:=-Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
+WARNINGS:= -Werror -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion
-CFLAGS:=-nostdlib -nostartfiles -fno-builtin -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1
+CFLAGS:=-nostdlib -nostartfiles -fno-builtin -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -I $(PROJDIRS)
 LDFLAGS:=-Tstewieos.ld -lgcc -nostdlib
 
-CC:=i586-pc-codeos-gcc
-LD:=i586-pc-codeos-gcc
+CC:=i586-pc-stewieos-gcc
+LD:=i586-pc-stewieos-gcc
 ASM:=nasm
 
 KERNEL_VERSION:=0.0.1

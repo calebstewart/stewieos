@@ -4,7 +4,7 @@
 #include "kernel.h"
 #include <errno.h>
 
-int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags);
+int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags, void*);
 int testfs_put_super(struct filesystem* fs, struct superblock* super);
 int testfs_read_inode(struct superblock* super, struct inode* inode);
 int testfs_inode_lookup(struct inode* inode, struct dentry* dentry);
@@ -35,12 +35,13 @@ struct filesystem testfs_type = {
 	.fs_ops = &testfs_ops
 };
 
-int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags)
+int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags, void* data)
 {
 	// Shut up the compiler...
 	UNUSED(fs);
 	UNUSED(device);
 	UNUSED(flags);
+	UNUSED(data);
 	
 	super->s_magic = 0x2BADB002;
 	super->s_ops = &testfs_superblock_ops;

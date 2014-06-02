@@ -5,10 +5,13 @@
 #include "kmem.h"
 #include "sys/types.h"
 #include <errno.h>
+#include "spinlock.h"
 
 typedef struct {
 	char*  block;
 	int dirty;
+	off_t dirty_block;
+	spinlock_t lock;
 } block_data_t;
 
 #define GET_BLOCK_DATA(file) ((block_data_t*)((file)->f_private))
@@ -24,21 +27,21 @@ static ssize_t block_file_read(struct file*, char*, size_t);
 static ssize_t block_file_write(struct file*, const char*, size_t);
 
 static block_data_t* block_file_data(struct file* file);
-static void block_file_data_sync(struct file* file);
+static int  block_file_data_sync(struct file* file);
 static void block_data_lock(block_data_t* data);
 static void block_data_unlock(block_data_t* data);
 
 struct block_device* vfs_dev[256];
 struct file_operations block_device_fops = {
-	/*.open = block_file_open,
+	.open = block_file_open,
 	.close = block_file_close,
 	.read = block_file_read,
 	.write = block_file_write,
 	.ioctl = block_file_ioctl,
-	.fstat = block_file_fstat*/
+	.fstat = block_file_fstat
 };
 
-int register_major_device(unsigned int major, unsigned int nminors, struct block_operations* block_ops)
+int register_block_device(unsigned int major, unsigned int nminors, struct block_operations* block_ops)
 {
 	
 	if( major >= 256 )
@@ -74,7 +77,7 @@ int register_major_device(unsigned int major, unsigned int nminors, struct block
 	return 0;
 }
 
-int unregister_major_device(unsigned int major)
+int unregister_block_device(unsigned int major)
 {
 	if( major >= 256 || vfs_dev[major] == NULL ){
 		return 0;
@@ -86,12 +89,10 @@ int unregister_major_device(unsigned int major)
 	struct block_device* dev = vfs_dev[major];
 	vfs_dev[major] = NULL;
 	
-	if( dev->ops->detach ){
-		int result = dev->ops->detach(dev);
-		if( result != 0 ){
-			vfs_dev[major] = dev;
-			return result;
-		}
+	int result = block_detach(makedev(major,0));
+	if( result != 0 ){
+		vfs_dev[major] = dev;
+		return result;
 	}
 	
 	kfree(dev);
@@ -187,6 +188,17 @@ int block_close(dev_t devid)
 	return 0;
 }
 
+int block_file_ioctl(struct file* file, int cmd, char* parm)
+{
+	return block_ioctl(file->f_path.p_dentry->d_inode->i_dev, cmd, parm);	
+}
+int block_file_fstat(struct file* file, struct stat* stat)
+{
+	memset(stat, 0, sizeof(struct stat));
+	UNUSED(file);
+	return 0;
+}
+
 int block_file_open(struct file* file, struct dentry* dentry, int omode)
 {
 	UNUSED(omode);
@@ -200,8 +212,15 @@ int block_file_open(struct file* file, struct dentry* dentry, int omode)
 		return -ENODEV;
 	}
 	
-	file->f_private = (char*)kmalloc(device->blksz);
+	file->f_private = (char*)kmalloc(sizeof(block_data_t));
 	file->f_off = 0;
+	block_data_t* data = block_file_data(file);
+	data->block = (char*)kmalloc(device->blksz);
+	data->dirty = 0;
+	data->dirty_block = 0;
+	spin_init(&data->lock);
+	
+	block_file_data_sync(file);
 	
 	return 0;
 }
@@ -213,24 +232,41 @@ int block_file_close(struct file* file, struct dentry* dentry)
 	return block_close(file->f_path.p_dentry->d_inode->i_dev);
 }
 
-int file_read_next_block(struct file* file)
-{
-	dev_t dev = file->f_path.p_dentry->d_inode->i_dev;
-	struct block_device* device = get_block_device(dev);
-	char* buffer = (char*)file->f_private;
-	
-	off_t lba = file->f_off / device->blksz;
-	int result = block_read(dev, buffer, lba);
-	if( result != 0 ){
-		return result;
-	}
-	
-	return 0;
-}
-
 block_data_t* block_file_data(struct file* file)
 {
 	return (block_data_t*)file->f_private;
+}
+
+void block_data_lock(block_data_t* data)
+{
+	spin_lock(&data->lock);
+}
+
+void block_data_unlock(block_data_t* data)
+{
+	spin_unlock(&data->lock);	
+}
+
+int block_file_data_sync(struct file* file)
+{
+	block_data_t* data = block_file_data(file);
+	dev_t devid = file->f_path.p_dentry->d_inode->i_dev;
+	struct block_device* device = get_block_device(devid);
+	int result = 0;
+	
+	if( (file->f_off%device->blksz) == 0 )
+	{
+		// if data was written to the buffer, flush it to the device
+		if( data->dirty ){
+			block_write(devid, data->block, data->dirty_block);
+			data->dirty = 0;
+		}
+		if( (result = block_read(devid, data->block, file->f_off%device->blksz)) != 0 ){
+			return result;
+		}
+		data->dirty_block = file->f_off%device->blksz;
+	}
+	return 0;
 }
 
 ssize_t block_file_read(struct file* file, char* buffer, size_t count)
@@ -239,7 +275,7 @@ ssize_t block_file_read(struct file* file, char* buffer, size_t count)
 	struct block_device* device = get_block_device(devid);
 	size_t nread = 0;
 	int result = 0;
-	char* block = (char*)file->f_private;
+	block_data_t* data = block_file_data(file);
 
 	// invalid device
 	if( !device ){
@@ -249,38 +285,74 @@ ssize_t block_file_read(struct file* file, char* buffer, size_t count)
 	if( count == 0 ) {
 		return 0;
 	}
+	
+	block_data_lock(data);
+	
 	// read all the requested bytes
 	while( count > 0 )
 	{
-		// if we finished that block, read the next one
-		if( (file->f_off%device->blksz) == 0 ){
-			result = file_read_next_block(file);
-			if( result != 0 ){
-				return nread;
-			}
+		// this will synchronize the buffered data->block with the current file->f_off
+		// If this is the end of the disk or there was a read error, it will return an
+		// error code
+		if( (result = block_file_data_sync(file)) != 0 ){
+			break;
 		}
-		*buffer = block[file->f_off%device->blksz];
+		*buffer = data->block[file->f_off%device->blksz]; // read the next byte
 		file->f_off++;
 		nread++;
 		buffer++;
 	}
 	
+	block_data_unlock(data);
+	
+	if( result < 0 ){
+		nread = (ssize_t)result;
+	}
+	
 	return nread;
 }
-/*
+
 ssize_t block_file_write(struct file* file, const char* buffer, size_t count)
 {
 	dev_t devid = file->f_path.p_dentry->d_inode->i_dev;
 	struct block_device* device = get_block_device(devid);
 	size_t nwritten = 0;
 	int result = 0;
-	char* block = NULL;
-	
-	if(!device){
+	block_data_t* data = block_file_data(file);
+
+	// invalid device
+	if( !device ){
 		return (ssize_t)-ENODEV;
-	}
-	if( count == 0 ){
+	}	
+	// we don't need to read for that...
+	if( count == 0 ) {
 		return 0;
 	}
 	
-	*/
+	block_data_lock(data);
+	
+	// read all the requested bytes
+	while( count > 0 )
+	{
+		// this will synchronize the buffered data->block with the current file->f_off
+		// If this is the end of the disk or there was a read error, it will return an
+		// error code
+		if( (result = block_file_data_sync(file)) != 0 ){
+			break;
+		}
+		// when we fill this buffered block or close the file it will sync to the device
+		data->block[file->f_off%device->blksz] = *buffer; // write the next byte
+		data->dirty = 1;
+		file->f_off++;
+		nwritten++;
+		buffer++;
+	}
+	
+	block_data_unlock(data);
+	
+	if( result < 0 ){
+		nwritten = (ssize_t)result;
+	}
+	
+	return nwritten;
+}

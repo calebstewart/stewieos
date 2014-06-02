@@ -73,7 +73,6 @@ void debug_interrupt(struct regs* regs)
 	printk("%1VInstruction Pointer: 0x%X\n", regs->eip);
 	printk("%1VEFLAGS: 0x%X\n", regs->eflags);
 	printk("%1VDR6: 0x%X\n", dr6);
-	u32 eflags = 0;
 	asm volatile ("hlt");
 }
 

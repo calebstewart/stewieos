@@ -46,6 +46,7 @@ cleanup_vhd:
 	losetup -d /dev/loop0
 
 #Sometimes cleanup_vhd fails, so we need this to make the fix a little easier
+#I don't know why it fails, but in the mean time this works.
 fix_vhd:
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0

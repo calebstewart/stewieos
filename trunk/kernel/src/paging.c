@@ -21,8 +21,20 @@ void initial_switch_dir(void* cr3);
  */
 void init_paging( multiboot_info_t* mb )
 {
-	// 32MB of memory for now... we will fix it later
+	// Calculate the memory size
 	u32 memory_size = 1024*(mb->mem_lower + 1024 + mb->mem_upper);
+	
+	if( mb->flags & MULTIBOOT_INFO_MODS )
+	{
+		mb->mods_addr += KERNEL_VIRTUAL_BASE;
+		multiboot_module_t* module = (multiboot_module_t*)(mb->mods_addr);
+		for(u32 i = 0; i < mb->mods_count; i++)
+		{
+			if( (module[i].mod_end+KERNEL_VIRTUAL_BASE) > placement_address ){
+				placement_address = module[i].mod_end + KERNEL_VIRTUAL_BASE;
+			}
+		}
+	}
 	
 	physical_frame_count = memory_size / 0x1000; // number of frames
 	physical_frame = kmalloc((size_t)(physical_frame_count / 8));
@@ -40,7 +52,7 @@ void init_paging( multiboot_info_t* mb )
 		((u32)mmap) < mmap_end;\
 		mmap = (multiboot_memory_map_t*)((u32)mmap + mmap->size + sizeof(multiboot_uint32_t)))
 	{
-		//printk("memory block: %p-%p (%s)\n", (u32)mmap->addr, (u32)mmap->addr + (u32)mmap->len - 1, mmap->type == 1 ? "Available" : "Reserved");
+		printk("%1Vmemory block: %p-%p (%s)\n", (u32)mmap->addr, (u32)mmap->addr + (u32)mmap->len - 1, mmap->type == 1 ? "Available" : "Reserved");
 		if( mmap->type != 1 ) continue;
 		multiboot_uint64_t frame = (u32)mmap->addr;
 		while( frame < (mmap->addr + mmap->len) ){
@@ -89,6 +101,32 @@ void init_paging( multiboot_info_t* mb )
 	initial_switch_dir((void*)curdir->phys);
 	
 	init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
+}
+
+/* function: alloc_page
+ * parameters:
+ * 	dir		- the directory to modify
+ * 	addr		- the address/page to allocate the memory to
+ * 	user		- should this page be marked as user?
+ * 	rw		- Should this page be read/write?
+ * returns:
+ * 	0 on success or a negative error value.
+ * description:
+ * 	allocates a new physical page to the virtual address.
+ * 	If there is already a page allocated to the address,
+ * 	the function returns immediately.
+ */
+int alloc_page(page_dir_t* dir, void* addr, int user, int rw)
+{
+	page_t* page = get_page(addr, 1, dir);
+
+	if( page->frame != 0 ){
+		return 0;
+	}
+	
+	alloc_frame(page, user, rw);
+	
+	return 0;
 }
 
 /* function: get_page

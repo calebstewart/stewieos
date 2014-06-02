@@ -8,6 +8,11 @@
 #include "multiboot.h"
 #include <sys/fcntl.h>
 #include "sys/mount.h"
+#include "elf/elf32.h"
+#include "error.h"
+#include "sys/stat.h"
+#include "sys/types.h"
+#include <unistd.h>
 
 // testing spinlock
 #include "spinlock.h"
@@ -25,7 +30,8 @@ tick_t my_timer_callback(tick_t time, struct regs* regs)
 
 int global_var = 0;
 
-void multitasking_entry( void );
+void multitasking_entry( multiboot_info_t* mb);
+int initfs_install(multiboot_info_t* mb);
 
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
@@ -35,9 +41,11 @@ int kmain( multiboot_info_t* mb )
 	asm volatile("sti");
 	init_timer(1000); // init the timer at 1000hz
 	printk("initializing paging... ");
+	unsigned int curpos = get_cursor_pos();
+	printk("\n");
 	init_paging(mb); // initialize the page tables and enable paging
-	printk(" done.\n");
-	
+	printk_at(curpos, " done.\n");
+
 	char cpu_vendor[16] = {0};
 	u32 max_code = cpuid_string(CPUID_GETVENDORSTRING, cpu_vendor);
 	
@@ -55,13 +63,12 @@ int kmain( multiboot_info_t* mb )
 	printk("Initializing multitasking subsystem...\n");
 	task_init();
 	
-	
 	printk("init: forking init task... ");
 	
 	pid_t pid = sys_fork();
 	
 	if( pid == 0 ){
-		multitasking_entry();
+		multitasking_entry(mb);
 		// this should never happen
 		sys_exit(-1);
 	}
@@ -71,38 +78,48 @@ int kmain( multiboot_info_t* mb )
 	return (int)0xdeadbeaf;
 }
 
-void multitasking_entry( void )
+void multitasking_entry( multiboot_info_t* mb )
 {
 	//int status = 0;
 	//pid_t pid = 0;
-	const char* filename = "/somefile.txt";
+	//const char* filename = "/somefile.txt";
+	int fd = 0;
 	
 	printk("done.\n");
 	//while(1);
 	
+	initfs_install(mb);
+	
+	printk("INIT: Opening a module... ");
+	fd = sys_open("/test_mod.o", O_RDONLY, 0);
+	printk(" done (result: %d)\n", fd);
+	if( fd < 0 ){
+		printk("INIT: Unable to open module.\n");
+	} else {
+		struct stat file_info;
+		sys_fstat(fd, &file_info);
+		char* file_data = kmalloc(file_info.st_size);
+		sys_lseek(fd, 0, SEEK_SET);
+		sys_read(fd, file_data, file_info.st_size);
+		module_t* module = elf_init_module(file_data, file_info.st_size);
+		if( IS_ERR(module) ){
+			printk("INIT: error: unable to load module (error: %d).\n", PTR_ERR(module));
+			kfree(file_data);
+		} else {
+			printk("INIT: module load result code: %d\n", module->m_load(module));
+			printk("INIT: module remove result code: %d\n", module->m_remove(module));
+			kfree(module->m_loadaddr);
+		}
+		sys_close(fd);
+	}
+	/*
 	printk("INIT: mounting testfs to \"/\"...\n");
 	int result = sys_mount("", "/", "testfs", MS_RDONLY, NULL);
 	printk("INIT: mounting result: %i\n", result);
 	
-	/*
-	pid = sys_fork();
-	//while(1);
-	if( pid != 0 )
-	{
-		printk("INIT: waiting for child to exit...\n");
-		sys_waitpid(-1, &status, 0);
-		printk("INIT: child exited with result %i\n", status);
-	} else {
-		printk("child: waiting for five seconds...\n");
-		tick_t child_end = timer_get_ticks()+5*timer_get_freq();
-		while(child_end > timer_get_ticks());
-		printk("child: exiting with result %d.\n", 42);
-		sys_exit(42);
-	}*/
-	
 	printk("INIT: attempting to open file %s\n", filename);
 
-	int fd = sys_open(filename, O_RDONLY, 0);
+	fd = sys_open(filename, O_RDONLY, 0);
 	
 	
 	if( fd >= 0 ){
@@ -136,14 +153,17 @@ void multitasking_entry( void )
 		printk("INIT: successfully opened %s: file descriptor: %i\n", filename, fd);
 	} else {
 		printk("INIT: unable to open %s (error %d).\n", filename, fd);
-	}
+	}*/
 	
+	printk("INIT: Finished.\n");
+	
+	return;
 	printk("INIT: creating a new spinlock.\n");
 	spinlock_t* lock = (spinlock_t*)kmalloc(sizeof(spinlock_t));
 	printk("INIT: initializing the lock to `unlocked' state.\n");
 	spin_init(lock);
 	printk("INIT: attempting a fork.\n");
-	pid_t pid = sys_fork();
+	sys_fork();
 	printk("INIT(%d): forked init process.\n", sys_getpid());
 	
 	spin_lock(lock);

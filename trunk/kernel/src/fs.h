@@ -24,6 +24,7 @@ struct dentry;				// see dentry.h
 struct dirent;				// until I implement dirent.h...
 struct filesystem;			// forward decl
 struct superblock;			// forward decl
+struct path;				// forward decl
 
 /* type: struct inode_operations
  * purpose:
@@ -37,7 +38,7 @@ struct inode_operations
 	// Working with children
 	int(*lookup)(struct inode*, struct dentry*);
 	// Creating children (only for inodes representing a directory)
-	int(*creat)(struct inode*, const char*, mode_t, struct dentry** dentry);
+	int(*creat)(struct inode*, const char*, mode_t, struct path* dentry);
 	int(*mknod)(struct inode*, const char*, mode_t, dev_t);
 	int(*mkdir)(struct inode*, const char*, mode_t);
 	int(*link)(struct inode*, const char*, struct inode*);
@@ -71,7 +72,7 @@ struct file_operations
  */
 struct filesystem_operations
 {
-	int(*read_super)(struct filesystem*,struct superblock*, dev_t, unsigned long);
+	int(*read_super)(struct filesystem*,struct superblock*, dev_t, unsigned long, void*);
 	int(*put_super)(struct filesystem*, struct superblock*);
 };
 
@@ -135,6 +136,7 @@ struct filesystem
 	struct filesystem_operations*	fs_ops;			// file system operations (supplied by the driver)
 	list_t				fs_slist;		// list of superblocks associated with the file system
 	list_t				fs_fslink;		// link in the list of filesystem structures
+	
 };
 
 /* type: struct superblock
@@ -316,6 +318,14 @@ int path_access(struct path* path, int mode);
 void path_put(struct path* path);
 void path_copy(struct path* dst, struct path* src);
 
+struct file* file_open(struct path* path, int flags);
+int file_close(struct file* file);
+ssize_t file_read(struct file* file, void* buf, size_t count);
+ssize_t file_write(struct file* file, const void* buf, size_t count);
+off_t file_seek(struct file* file, off_t offsets, int whence);
+int file_ioctl(struct file* file, int request, char* argp);
+int file_stat(struct file* file, struct stat* buf);
+
 /* Unix System Call Definitions
  * 
  * For more information about a sys_* routine, see the syscall manual entry
@@ -339,6 +349,7 @@ int sys_access(const char* file, int mode);
 int sys_chmod(const char* file, mode_t mode);
 int sys_chown(const char* path, uid_t owner, gid_t group);
 mode_t sys_umask(mode_t mask);
+int sys_mknod(const char* path, mode_t mode, dev_t dev);
 
 void copy_task_vfs(struct vfs* dest, struct vfs* src);
 void init_task_vfs(struct vfs* vfs);
