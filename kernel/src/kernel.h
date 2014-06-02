@@ -2,6 +2,7 @@
 #define _KERNEL_H_
 
 #include <sys/types.h>
+#include <string.h>
 #include "gcc-builtin.h"
 
 #define MAXNAMELEN		256			/* the maximum length of a name string in the file system */
@@ -31,6 +32,8 @@
 #else
 #	define debug_message(fmt, ...)
 #endif
+
+#define info_message(fmt, ...) printk("%1V%s: " fmt "\n", MODULE_NAME, __VA_ARGS__)
 
 /* enum cpuid_requests
  * purpose:
@@ -121,16 +124,18 @@ typedef unsigned int	u32;
 typedef signed int	s32;
 typedef unsigned int	uint;
 
-extern int (*printk)(const char* format, ...);
+int printk(const char* format, ...);
+int printk_at(unsigned int pos, const char* format, ...);
+unsigned int get_cursor_pos( void );
 
-int initial_printk(const char* format, ...);
+int initial_printk(const char* format, __builtin_va_list va);
 
 void outb(unsigned short port, unsigned char v);
 unsigned char inb(unsigned short port);
 unsigned short inw(unsigned short port);
 
-size_t memset(void* ptr, int v, size_t count);
-size_t memcpy(void* dst, void* src, size_t count);
+//size_t memset(void* ptr, int v, size_t count);
+//size_t memcpy(void* dst, void* src, size_t count);
 
 void cpuid(int code, u32* a, u32* d);
 u32 cpuid_string(int code, char* str);

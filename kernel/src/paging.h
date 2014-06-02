@@ -44,6 +44,8 @@ void init_paging( multiboot_info_t* mb );
  */
 void switch_page_dir(page_dir_t* dir);
 
+int alloc_page(page_dir_t* dir, void* address, int user, int rw);
+
 /*! \brief Find the page structure for a given address
  * 
  * Searches a directory to find the page entry for the given

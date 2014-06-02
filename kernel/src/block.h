@@ -49,12 +49,12 @@ struct block_device
  * 	is chosen. The major device number is
  * 	always returned.
  */
-int register_major_device(unsigned int major, unsigned int nminors, struct block_operations* block_ops);
+int register_block_device(unsigned int major, unsigned int nminors, struct block_operations* block_ops);
 /* function: unregister_major_device
  * purpose:
  * 	removes the major device from memory.
  */
-int unregister_major_device(unsigned int major);
+int unregister_block_device(unsigned int major);
 /* function: get_block_device
  * purpose
  * 	retrieve the block device structure
