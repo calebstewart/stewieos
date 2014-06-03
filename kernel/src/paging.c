@@ -1,6 +1,7 @@
 #include "paging.h"
 #include "kmem.h"
 #include "pmm.h"
+#include "elf/elf32.h"
 
 page_dir_t* kerndir = NULL;
 page_dir_t* curdir = NULL;

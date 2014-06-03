@@ -7,6 +7,14 @@
 #include "error.h"
 #include "kmem.h"
 
+// The kernel section header and accompanying information
+Elf32_Word g_shdr_num = 0;
+Elf32_Shdr* g_shdr = NULL;
+Elf32_Shdr* g_symhdr = NULL;
+Elf32_Shdr* g_shstrhdr = NULL;
+char* g_shstrtab = NULL;
+Elf32_Sym* g_symtab = NULL;
+
 // Defines the elf executable loader interface
 exec_type_t elf_exec_type = {
 	.name = "ELF32",
@@ -232,12 +240,14 @@ int elf_apply_relocation(Elf32_Ehdr* ehdr, Elf32_Shdr* bss, Elf32_Shdr* relshn, 
 Elf32_Sym* elf_resolve_symbol(Elf32_Ehdr* ehdr, Elf32_Shdr* symshn, Elf32_Shdr* bss, Elf32_Word id)
 {
 	Elf32_Sym* symtab = (Elf32_Sym*)( (Elf32_Addr)ehdr + symshn->sh_offset );
+	Elf32_Shdr* shdr = (Elf32_Shdr*)( (Elf32_Addr)ehdr + ehdr->e_shoff );
+	char* strtab = (char*)( (Elf32_Addr)ehdr + shdr[symshn->sh_link].sh_offset );
 	
 	// We need to load in the symbol table for the kernel
 	// so we can link modules to the kernel, but for now
 	// just make the executables invalid...
 	if( symtab[id].st_shndx == SHN_UNDEF ){
-		printk("%2Velf_resolve_symbol: unable to resolve symbol.\n");
+		printk("%2Velf_resolve_symbol: unable to resolve symbol `%s'.\n", strtab[symtab[id].st_name]);
 		return ERR_PTR(-EINVAL);
 	}
 	

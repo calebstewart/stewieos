@@ -13,6 +13,7 @@
 #include "sys/stat.h"
 #include "sys/types.h"
 #include <unistd.h>
+#include "exec.h"
 
 // testing spinlock
 #include "spinlock.h"
@@ -80,97 +81,24 @@ int kmain( multiboot_info_t* mb )
 
 void multitasking_entry( multiboot_info_t* mb )
 {
-	//int status = 0;
-	//pid_t pid = 0;
-	//const char* filename = "/somefile.txt";
-	int fd = 0;
-	
 	printk("done.\n");
-	//while(1);
 	
 	initfs_install(mb);
 	
-	printk("INIT: Opening a module... ");
-	fd = sys_open("/test_mod.o", O_RDONLY, 0);
-	printk(" done (result: %d)\n", fd);
-	if( fd < 0 ){
-		printk("INIT: Unable to open module.\n");
+	printk("INIT: loading module 'test_mod.o'\n");
+	int error = sys_insmod("/test_mod.o");
+	if( error != 0 ){
+		printk("INIT: unable to load module: %d\n", error);
 	} else {
-		struct stat file_info;
-		sys_fstat(fd, &file_info);
-		char* file_data = kmalloc(file_info.st_size);
-		sys_lseek(fd, 0, SEEK_SET);
-		sys_read(fd, file_data, file_info.st_size);
-		module_t* module = elf_init_module(file_data, file_info.st_size);
-		if( IS_ERR(module) ){
-			printk("INIT: error: unable to load module (error: %d).\n", PTR_ERR(module));
-			kfree(file_data);
-		} else {
-			printk("INIT: module load result code: %d\n", module->m_load(module));
-			printk("INIT: module remove result code: %d\n", module->m_remove(module));
-			kfree(module->m_loadaddr);
+		printk("INIT: removing module 'test_mod'\n");
+		error = sys_rmmod("test_mod");
+		if( error != 0 ){
+			printk("INIT: unable to remove module: %d\n", error);
 		}
-		sys_close(fd);
 	}
-	/*
-	printk("INIT: mounting testfs to \"/\"...\n");
-	int result = sys_mount("", "/", "testfs", MS_RDONLY, NULL);
-	printk("INIT: mounting result: %i\n", result);
-	
-	printk("INIT: attempting to open file %s\n", filename);
-
-	fd = sys_open(filename, O_RDONLY, 0);
-	
-	
-	if( fd >= 0 ){
-		printk("INIT: successfully opened %s: file descriptor %i\n", filename, fd);
-	} else {
-		printk("INIT: unable to open %s: error code %i\n", filename, fd);
-	}
-	
-	printk("INIT: attempting to unmount while file is open...\n");
-	result = sys_umount("/", 0);
-	if( result == 0 ){
-		printk("INIT: Uh-Oh, I was able to unmount with an open file...\n");
-	} else {
-		printk("INIT: Good, that didn't go well (error %d).\n", result);
-	}
-	
-	printk("INIT: closing open file descriptor...\n");
-	sys_close(fd);
-	
-	printk("INIT: attempting to unmount the filesystem again...\n");
-	result = sys_umount("/", 0);
-	if( result == 0 ){
-		printk("INIT: the filesystem was successfully unmounted!\n");
-	} else {
-		printk("INIT: filesystem could not be unmounted (error %d)\n", result);
-	}
-	
-	printk("INIT: attempting to open a file from old mount...\n");
-	fd = sys_open(filename, O_RDONLY, 0);
-	if( fd >= 0 ){
-		printk("INIT: successfully opened %s: file descriptor: %i\n", filename, fd);
-	} else {
-		printk("INIT: unable to open %s (error %d).\n", filename, fd);
-	}*/
 	
 	printk("INIT: Finished.\n");
 	
 	return;
-	printk("INIT: creating a new spinlock.\n");
-	spinlock_t* lock = (spinlock_t*)kmalloc(sizeof(spinlock_t));
-	printk("INIT: initializing the lock to `unlocked' state.\n");
-	spin_init(lock);
-	printk("INIT: attempting a fork.\n");
-	sys_fork();
-	printk("INIT(%d): forked init process.\n", sys_getpid());
-	
-	spin_lock(lock);
-	printk("INIT(%d): Process %d locked the spinlock.\n", sys_getpid(), sys_getpid());
-	tick_t wait_end = timer_get_ticks()+5*timer_get_freq();
-	while( wait_end > timer_get_ticks() );
-	printk("INIT(%d): Process %d unlocking...\n", sys_getpid(), sys_getpid());
-	spin_unlock(lock);
 	
 }

@@ -385,6 +385,8 @@ int elf_apply_relocation(Elf32_Ehdr* ehdr, Elf32_Shdr* bss, Elf32_Shdr* relshn, 
 // and retreieved with IS_ERR and PTR_ERR respectively.
 Elf32_Sym* elf_resolve_symbol(Elf32_Ehdr* ehdr, Elf32_Shdr* symshn, Elf32_Shdr* bss, Elf32_Word id);
 
+Elf32_Sym* elf_find_symbol(Elf32_Shdr* shdr, Elf32_Sym* tab, const char* name);
+
 // Check if this is a loadable executable
 int elf_check_file(struct file* file);
 // Load the file as an executable into memory
@@ -393,5 +395,15 @@ int elf_load_exec(exec_t* exec);
 int elf_load_module(exec_t* file);
 // Load the file as a shared library
 int elf_load_shared(struct file* file);
+
+// Global Variable Definitions
+
+// The kernel section header table
+extern Elf32_Word g_shdr_num;
+extern Elf32_Shdr* g_shdr;
+extern Elf32_Shdr* g_symhdr;
+extern Elf32_Sym* g_symtab;
+extern Elf32_Shdr* g_shstrhdr;
+extern char* g_shstrtab;
 
 #endif
