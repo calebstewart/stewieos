@@ -21,7 +21,8 @@
 
 
 # This is where you can add project directories to the source
-PROJECTS:=kernel
+# kernel should come first here!
+PROJECTS:=kernel test_mod
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)

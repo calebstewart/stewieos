@@ -22,6 +22,8 @@ KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)
 .PHONY: all install clean
 
 all: $(KERNEL_NAME)
+	rm -f ../stewieos-current
+	ln -s $(shell readlink -f $(KERNEL_NAME)) ../stewieos-current
 
 install:
 	cp ./$(KERNEL_NAME) /mnt/boot/
