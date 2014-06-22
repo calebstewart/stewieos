@@ -224,6 +224,7 @@ int path_lookup(const char* name, int flags, struct path* path)
 	char			*iter = query;
 	char			*slash;
 	struct dentry		*child;
+	int			error = 0;
 	
 	if( strlen(name) > 511 ){
 		return -ENAMETOOLONG;
@@ -261,40 +262,23 @@ int path_lookup(const char* name, int flags, struct path* path)
 			if( *(iter+1) == '/' ){
 				iter += 2;
 			} else if( *(iter+1) == '.' ){
-				// Previous directory
-				if( *(iter+2) == '/' ){
-					// NOTE Handle going up "through" a mount
-					// no previous directory
-					if( path->p_dentry->d_parent == NULL ){
-						path_put(path);
-						path->p_dentry = NULL;
-						return -ENOENT;
-					}
-					// Find the previous directory, and grab a reference to
-					iter += 3;
-					struct dentry* newroot = d_get(path->p_dentry->d_parent);
-					d_put(path->p_dentry); // just release the dentry, reuse the mount
-					path->p_dentry = newroot;
-				} else if( *(iter+2) == '\0' ){
-					// No previous directory
-					if( path->p_dentry->d_parent == NULL ){
-						path_put(path);
-						path->p_dentry = NULL;
-						return -ENOENT;
-					}
-					// they just wanted the parent
-					struct dentry* dentry = d_get(path->p_dentry->d_parent);
-					d_put(path->p_dentry); // just release the dentry, reuse the mount
-					path->p_dentry = dentry;
-					return 0;
+				// This will make path reference its parent (event through mountpoints)
+				error = path_get_parent(path);
+				if( error != 0 ){
+					path_put(path);
+					return error;
 				}
-			} else if( *(iter+1) == 0 ){
+				// If that was the last character, we can just return.
+				if( *(iter+2) == '\0' ){
+					break;
+				}
+			} else if( *(iter+1) == '\0' ){
 				// They just wanted the current directory entry
-				return 0;
+				break;
 			}
 		} else if( *iter == 0 ){
 			// The query was empty: Same as "./"
-			return 0;
+			break;
 		}
 		
 		// do we have search permissions?
@@ -317,7 +301,7 @@ int path_lookup(const char* name, int flags, struct path* path)
 				mnt_put(path->p_mount);
 				return PTR_ERR(path->p_dentry);
 			} else {
-				return 0;
+				break;
 			}
 		}
 		
@@ -336,7 +320,36 @@ int path_lookup(const char* name, int flags, struct path* path)
 		path->p_dentry = child;
 	}
 	
+	if( flags & WP_PARENT ){
+		error = path_get_parent(path);
+		if( error != 0 ){
+			path_put(path);
+			return error;
+		}
+	}
+	
 	return 0;
+}
+
+int path_get_parent(struct path* path)
+{
+	if( path->p_dentry->d_parent ){
+		struct dentry* parent = d_get(path->p_dentry->d_parent); // get the parent
+		d_put(path->p_dentry); // free the current
+		path->p_dentry = parent; // save the parent
+		return 0;
+	} else {
+		struct path parent; // temporary path structure
+		// grab a reference so it doens't get deleted on path_put(path)
+		path_copy(&parent, &path->p_dentry->d_mountpoint->mp_point);
+		// free this path
+		path_put(path);
+		// put it in the path pointer
+		path_copy(path, &parent);
+		// free the temporary path
+		path_put(&parent);
+		return 0;
+	}
 }
 
 /*
@@ -456,7 +469,7 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 			return -ENOMEM;
 		}
 		memset(target.p_dentry->d_mountpoint, 0, sizeof(struct mountpoint));
-		target.p_dentry->d_mountpoint->mp_point = d_get(target.p_dentry);
+		path_copy(&target.p_dentry->d_mountpoint->mp_point, &target);
 		INIT_LIST(&target.p_dentry->d_mountpoint->mp_mounts);
 	}
 	
@@ -555,8 +568,9 @@ int sys_umount(const char* target_name, int flags)
 	// No more mounts at this mountpoint. Destroy it.
 	if( list_empty(&mountpoint->mp_mounts) )
 	{
-		mountpoint->mp_point->d_mountpoint = NULL;
-		d_put(mountpoint->mp_point);
+		
+		mountpoint->mp_point.p_dentry->d_mountpoint = NULL;
+		path_put(&mountpoint->mp_point);
 		kfree(mountpoint);
 	}
 	
@@ -630,7 +644,36 @@ int sys_mknod(const char* path, mode_t mode, dev_t dev)
 	UNUSED(path);
 	UNUSED(mode);
 	UNUSED(dev);
-	return 0;
+	
+	struct path		parent;
+	int			error;
+	
+	// Lookup the parent directory
+	error = path_lookup(path, WP_PARENT, &parent);
+	if( error != 0 ){
+		return error;
+	}
+	
+	// Make sure we have write permissions
+	error = path_access(&parent, W_OK);
+	if( error != 0 ){
+		path_put(&parent);
+		return error;
+	}
+	
+	if( !parent.p_dentry->d_inode->i_ops->mknod ){
+		path_put(&parent);
+		return -EPERM;
+	}
+	
+	// All the nitty-gritty is done by the filesystem driver.
+	error = parent.p_dentry->d_inode->i_ops->mknod(parent.p_dentry->d_inode, basename(path), mode, dev);
+	
+	// Release the parent path
+	path_put(&parent);
+	
+	// Return any possible error (or zero on success)
+	return error;
 }
 
 int inode_trunc(struct inode* inode)
@@ -650,8 +693,10 @@ int sys_open(const char* filename, int flags, mode_t mode)
 	
 	// Find a free file descriptor
 	for(int i = 0; i < TASK_MAX_OPEN_FILES; i++){
-		if( !current->t_vfs.v_openvect[i].file ){
+		if( !(current->t_vfs.v_openvect[i].flags & FD_OCCUPIED) ){
 			fd = i;
+			// Reserve the file descriptor
+			current->t_vfs.v_openvect[i].flags = FD_OCCUPIED | FD_INVALID;
 			break;
 		}
 	}
@@ -665,8 +710,17 @@ int sys_open(const char* filename, int flags, mode_t mode)
 		if( flags & O_CREAT )
 		{
 			// create a new regular file
-			result = create_file(filename, (mode & S_IFMT) | S_IFREG, &path);
+			result = sys_mknod(filename, (mode & S_IFMT) | S_IFREG, 0);
+			//result = create_file(filename, (mode & S_IFMT) | S_IFREG, &path);
 			if( result != 0 ){
+				current->t_vfs.v_openvect[fd].flags = 0;
+				return result;
+			}
+			// Lookup the new file
+			result = path_lookup(filename, WP_DEFAULT, &path);
+			// This shouldn't happen, since we supposedly just successfully created the file
+			if( result != 0 ){
+				current->t_vfs.v_openvect[fd].flags = 0;
 				return result;
 			}
 		} else { // the file doesn't exist and we don't want to create it
@@ -680,15 +734,18 @@ int sys_open(const char* filename, int flags, mode_t mode)
 	
 	// Open the path as a file, and release our path reference
 	current->t_vfs.v_openvect[fd].file = file_open(&path, flags);
-	current->t_vfs.v_openvect[fd].flags = 0;
 	path_put(&path);
 	
 	// There was an error opening the file
 	if( IS_ERR(current->t_vfs.v_openvect[fd].file) ){
 		result = PTR_ERR(current->t_vfs.v_openvect[fd].file);
 		current->t_vfs.v_openvect[fd].file = NULL;
+		current->t_vfs.v_openvect[fd].flags = 0; // not occupied anymore
 		return result;
 	}
+	
+	// Remove the invalid flag, the file descriptor is ready
+	current->t_vfs.v_openvect[fd].flags &= ~FD_INVALID;
 	
 	return fd;
 }
@@ -703,14 +760,20 @@ int sys_open(const char* filename, int flags, mode_t mode)
  */
 int sys_close(int fd)
 {
-	if( current->t_vfs.v_openvect[fd].file == NULL )
+	if( !FD_VALID(fd) )
 		return -EBADF;
 	
 	struct file* file = current->t_vfs.v_openvect[fd].file;
+	int error = file_close(file);
+	
+	if( error != 0 ){
+		return error;
+	}
 	
 	current->t_vfs.v_openvect[fd].file = NULL;
+	current->t_vfs.v_openvect[fd].flags = 0;
 	
-	return file_close(file);
+	return 0;
 }
 
 /* function: sys_read
@@ -726,13 +789,11 @@ int sys_close(int fd)
  */
 ssize_t sys_read(int fd, void* buf, size_t count)
 {
-	struct file* file = current->t_vfs.v_openvect[fd].file;
-	//int omode = file->f_status;
-	
-	// Check for invalid file descriptor
-	if( !file ){
+	if( !FD_VALID(fd) ){
 		return -EBADF;
 	}
+	
+	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_read(file, buf, count);
 }
@@ -750,13 +811,11 @@ ssize_t sys_read(int fd, void* buf, size_t count)
  */
 ssize_t sys_write(int fd, const void* buf, size_t count)
 {
-	struct file* file = current->t_vfs.v_openvect[fd].file;
-//	int omode = file->f_status;
-	
-	// Check for invalid file descriptor
-	if( !file ){
+	if( !FD_VALID(fd) ){
 		return -EBADF;
 	}
+	
+	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_write(file, buf, count);
 }
@@ -773,34 +832,38 @@ ssize_t sys_write(int fd, const void* buf, size_t count)
  */
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
-	struct file* file = current->t_vfs.v_openvect[fd].file;
-	
-	if( !file ){
+	if( !FD_VALID(fd) ){
 		return (off_t)-EBADF;
 	}
+	
+	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_seek(file, offset, whence);
 }
 
 int sys_dup(int old_fd)
 {
-	struct file* file = current->t_vfs.v_openvect[old_fd].file;
-	if( !file ){
+	if( !FD_VALID(old_fd) ){
 		return -EBADF;
 	}
 	
+	struct file* file = current->t_vfs.v_openvect[old_fd].file;
+	
 	int new_fd = 0;
-	for(; new_fd < TASK_MAX_OPEN_FILES; new_fd++){
-		if( !current->t_vfs.v_openvect[new_fd].file ) break;
+	for(; new_fd < FS_MAX_OPEN_FILES; new_fd++){
+		if( !(current->t_vfs.v_openvect[new_fd].flags & FD_OCCUPIED) ){
+			current->t_vfs.v_openvect[new_fd].flags = FD_OCCUPIED | FD_INVALID;
+			break;
+		}
 	}
-	if( new_fd == TASK_MAX_OPEN_FILES ){
+	if( new_fd == FS_MAX_OPEN_FILES ){
 		return -EMFILE;
 	}
 	
 	// Copy the file description
 	file->f_refs++;
 	current->t_vfs.v_openvect[new_fd].file = file;
-	current->t_vfs.v_openvect[new_fd].flags = 0;
+	current->t_vfs.v_openvect[new_fd].flags = FD_OCCUPIED;
 	
 	// Return the new file descriptor
 	return new_fd;
@@ -815,9 +878,9 @@ int sys_link(const char* old_path, const char* new_path)
 	strcpy(new_parent, new_path);
 	// basename just returns the character after the last slash
 	char* new_base = basename(new_parent);
-	// Make that character a terminating character
+	// Make the slash a null character character a terminating character
 	*(new_base-1) = 0;
-	// temp is now the path to the parent, and new_base
+	// new_parent is now the path to the parent, and new_base
 	// is the basename
 	
 	// Lookup the old item
@@ -860,10 +923,10 @@ int sys_link(const char* old_path, const char* new_path)
 
 int sys_fstat(int fd, struct stat* st)
 {
-	struct file* file = current->t_vfs.v_openvect[fd].file;
-	if(!file){
+	if( !FD_VALID(fd) ){
 		return -EBADF;
 	}
+	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_stat(file, st);
 }
@@ -881,6 +944,22 @@ int path_access(struct path* path, int mode)
 	
 	struct inode* inode = path->p_dentry->d_inode;
 	
+	// we are root!
+	if( current->t_uid == 0 )
+	{
+		// Even root can't write to a Read Only mounted filesystem...
+		if( path->p_mount->m_flags & MS_RDONLY && (mode & W_OK) ){
+			return -EROFS;
+		}
+		
+		// We also can't execute non-executables...
+		if( (mode & X_OK) && !(inode->i_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) ){
+			return -EACCES;
+		}
+		
+		// Otherwise, we are golden!
+		return 0;
+	}
 	if( mode & W_OK )
 	{
 		if( path->p_mount->m_flags & MS_RDONLY ){

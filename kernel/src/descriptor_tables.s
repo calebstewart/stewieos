@@ -140,6 +140,7 @@ IRQ 15,47
 irq_stub:
 	pusha		; Push all common registers
 	
+	xor eax,eax	; Clear eax
 	mov ax,ds	; we save the data segment through eax
 	push eax
 	
@@ -178,6 +179,7 @@ irq_stub:
 isr_stub:
 	pusha		; Push all common registers
 	
+	xor eax,eax
 	mov ax,ds	; we save the data segment through eax
 	push eax
 	

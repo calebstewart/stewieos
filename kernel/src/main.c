@@ -14,6 +14,7 @@
 #include "sys/types.h"
 #include <unistd.h>
 #include "exec.h"
+#include "pci.h"
 
 // testing spinlock
 #include "spinlock.h"
@@ -36,7 +37,7 @@ int initfs_install(multiboot_info_t* mb);
 
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
-{
+{	
 	//clear_screen();
 	initialize_descriptor_tables();
 	asm volatile("sti");
@@ -60,6 +61,8 @@ int kmain( multiboot_info_t* mb )
 	printk("Initializing virtual filesystem... ");
 	initialize_filesystem();
 	printk("done.\n");
+	
+	pci_enumerate();
 	
 	printk("Initializing multitasking subsystem...\n");
 	task_init();
@@ -85,16 +88,12 @@ void multitasking_entry( multiboot_info_t* mb )
 	
 	initfs_install(mb);
 	
-	printk("INIT: loading module 'test_mod.o'\n");
-	int error = sys_insmod("/test_mod.o");
+	printk("INIT: loading module 'ide.o'\n");
+	int error = sys_insmod("/ide.o");
 	if( error != 0 ){
 		printk("INIT: unable to load module: %d\n", error);
 	} else {
-		printk("INIT: removing module 'test_mod'\n");
-		error = sys_rmmod("test_mod");
-		if( error != 0 ){
-			printk("INIT: unable to remove module: %d\n", error);
-		}
+		printk("INIT: ide.o successfully loaded.\n");
 	}
 	
 	printk("INIT: Finished.\n");

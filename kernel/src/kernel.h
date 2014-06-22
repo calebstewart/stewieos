@@ -132,7 +132,10 @@ int initial_printk(const char* format, __builtin_va_list va);
 
 void outb(unsigned short port, unsigned char v);
 unsigned char inb(unsigned short port);
+void outw(unsigned short port, unsigned short v);
 unsigned short inw(unsigned short port);
+void outl(unsigned short port, unsigned long v);
+unsigned long inl(unsigned short port);
 
 //size_t memset(void* ptr, int v, size_t count);
 //size_t memcpy(void* dst, void* src, size_t count);

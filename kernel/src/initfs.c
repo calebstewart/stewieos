@@ -82,7 +82,7 @@ int initfs_install(multiboot_info_t* mb)
 	{
 		printk("%2VINIT: error: filesystem registration failed with %d.\n", result);
 	} else { 
-		result = sys_mount(NULL, "/", "initfs", MS_RDONLY, mb);
+		result = sys_mount(NULL, "/", "initfs", MS_RDONLY, ((char*)mb) + KERNEL_VIRTUAL_BASE);
 		if( result != 0 )
 		{
 			printk("%2VINIT: error: filesystem mounting failed with %d.\n", result);
@@ -100,6 +100,7 @@ int initfs_read_super(struct filesystem* fs, struct superblock* super, dev_t dev
 	
 	// was the bootloader configured to give us modules?
 	if( !(mb->flags & MULTIBOOT_INFO_MODS) ){
+		printk("multiboot: 0x%08X\nflags: 0x%X", mb, mb->flags);
 		return -ENODEV;
 	}
 	

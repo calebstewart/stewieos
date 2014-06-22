@@ -22,12 +22,18 @@
 
 # This is where you can add project directories to the source
 # kernel should come first here!
-PROJECTS:=kernel test_mod
+PROJECTS:=kernel modules
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
+FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd perpare_flashdrive cleanup_flashdrive flashdrive
+
+export KERNEL_DIR:=$(abspath ./kernel)
+export MODULES_DIR:=$(abspath ./modules)
+export STEWIEOS_DIR:=$(abspath ./)
+export STEWIEOS_CURRENT:=$(abspath ./stewieos-current)
 
 all: $(ALLPROJECTS)
 #@echo "Please build each subsystem one at time. Here is a list of subsystems to build:\n$(PROJECTS)\nE.g. \"make all-'subsystemname'\""
@@ -45,6 +51,14 @@ cleanup_vhd:
 	umount /mnt
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0
+	
+flashdrive: prepare_flashdrive $(INSTALLPROJECTS) cleanup_flashdrive
+	
+prepare_flashdrive:
+	mount $(FLASHDRIVE) /mnt
+
+cleanup_flashdrive:
+	umount /mnt
 
 #Sometimes cleanup_vhd fails, so we need this to make the fix a little easier
 #I don't know why it fails, but in the mean time this works.

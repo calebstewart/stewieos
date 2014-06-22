@@ -147,6 +147,10 @@ module_t* elf_init_module(void* file, size_t length)
 			kfree(file);
 			file = newfile;
 		}
+		Elf32_Addr ptr = (Elf32_Addr)file + bss->sh_offset;
+		for(Elf32_Off i = 0; i < bss->sh_size; i++){
+			*((char*)( ptr + i )) = 0;
+		}
 	}
 	
 	// We set this just in  case it was changed for the bss
