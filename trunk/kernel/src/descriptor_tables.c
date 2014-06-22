@@ -31,6 +31,11 @@ int initialize_descriptor_tables()
 	printk("installing interrupt descriptor table... ");
 	initialize_idt();
 	printk("done.\n");
+	
+	u32 eflags = disablei();
+	eflags = eflags & ~(1 << 12);
+	eflags &= ~(1 << 13);
+	restore(eflags);
 	return 0;
 }
 
@@ -57,7 +62,8 @@ static void gdt_set_gate(int n, u32 base, u32 limit, u8 access, u8 gran)
 	gdt_table[n].base_low = (base & 0xFFFF);
 	gdt_table[n].base_middle = (u8)((base & 0xFF0000) >> 16);
 	gdt_table[n].base_high = (u8)((base & 0xFF000000) >> 24);
-	gdt_table[n].granularity = (u8)((limit & 0xF0000) >> 16);
+	gdt_table[n].limit_low = limit & 0xFFFF;
+	gdt_table[n].granularity = (u8)((limit >> 16) & 0x0F);
 	gdt_table[n].granularity = (u8)(gdt_table[n].granularity | (gran & 0xF0));
 	gdt_table[n].access = access;
 }
@@ -161,15 +167,66 @@ static void idt_set_gate(uint n, void(*base)(void), u16 sel, u8 flags)
 	idt_table[n].always0 = 0;
 }
 
+const char* g_fault_names[] = {
+	"Divide-by-Zero Error",
+	"Debug",
+	"Non-Maskable Interrupt",
+	"Breakpoint",
+	"Overflow",
+	"Bound Range Exceeded",
+	"Invalid Opcode",
+	"Device Not Available",
+	"Double Fault",
+	"Coprocessor Segment Overrun",
+	"Invalid TSS",
+	"Segment Not Present",
+	"Stack-Segment Fault",
+	"General Protection Fault",
+	"Page Fault",
+	"Reserved",
+	"x87 Floating-Point Exception",
+	"Alignment Check",
+	"Machine Check",
+	"SIMD Floating-Point Exception",
+	"Virtualization Exception",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"Security Exception",
+	"Reserved",
+};
+
 void isr_handler(struct regs regs)
 {
 	if( isr_callback[regs.intno] ){
 		isr_callback[regs.intno](&regs);
 		return;
 	}
-	printk("%2V\nUnhandled exception: 0x%X\n", regs.intno);
+	if( regs.intno < 32 ){
+		printk("%2V\nUnhandled Exception: %s (0x%X)\n", g_fault_names[regs.intno], regs.intno);
+	} else {
+		printk("%2V\nUnhandled Exception: 0x%X\n", regs.intno);
+	}
 	printk("%2VError Code: 0x%X\n", regs.err);
+	printk("%2VEFLAGS: 0x%X\n", regs.eflags);
 	printk("%2VEIP: 0x%X\n", regs.eip);
+	u32 cr0, cr3;
+	asm volatile ("movl %%cr0,%0;": "=r"(cr0));
+	asm volatile ("movl %%cr3,%0;": "=r"(cr3));
+	printk("%2VCR0: 0x%X\n", cr0);
+	printk("%2VCR3: 0x%X\n", cr3);
+	printk("%2VCS: 0x%X\nDS: 0x%X\n", regs.cs, regs.ds);
+	
+	printk("%2VGDT Table:\n");
+	for(int i = 0; i < 5; ++i){
+		printk("%2V%02X%02X%04X %04X %02X %02X\n", gdt_table[i].base_high, gdt_table[i].base_middle, gdt_table[i].base_low, gdt_table[i].limit_low, gdt_table[i].access, gdt_table[i].granularity);
+	}
 	//printk("%2VCAUGHT INTERRUPT SERVICE ROUTINE!\n");
 	
 	while(1);

@@ -11,6 +11,17 @@
 #define FS_NODEV		0x00000001
 #define FS_RDONLY		0x00000002
 
+// File Descriptor Flags
+// The file descriptor is taken
+#define FD_OCCUPIED		(1<<16)
+// The file descriptor is invalid at the moment,
+// but is still occupied (if FD_OCCUPIED)
+#define FD_INVALID		(1<<17)
+
+#define FS_MAX_OPEN_FILES TASK_MAX_OPEN_FILES
+
+#define FD_VALID(fd) ( (fd) > 0 && (fd) < FS_MAX_OPEN_FILES && (current->t_vfs.v_openvect[(fd)].flags & FD_OCCUPIED) && !(current->t_vfs.v_openvect[(fd)].flags & FD_INVALID) )
+
 // walk_path flags
 #define WP_DEFAULT		0x00000000
 #define WP_PARENT		0x00000001
@@ -235,7 +246,7 @@ struct mount
  */
 struct mountpoint
 {
-	struct dentry*			mp_point;		// Where these directory entries are mounted
+	struct path			mp_point;		// Where these directory entries are mounted
 	list_t				mp_mounts;		// A list of directory entries that are mounted here
 								// m_mounts->prev is the last dentry to be mounted,
 								// and therefore represents what the user sees.
@@ -317,6 +328,10 @@ int path_access(struct path* path, int mode);
 // can copy their contents, though.
 void path_put(struct path* path);
 void path_copy(struct path* dst, struct path* src);
+// 'steps' the path up one directory. If the return value is zero,
+// the path now points to its parent directory (event through mount
+// points).
+int path_get_parent(struct path* path);
 
 struct file* file_open(struct path* path, int flags);
 int file_close(struct file* file);

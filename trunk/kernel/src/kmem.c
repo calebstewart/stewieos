@@ -202,7 +202,8 @@ static struct header* heap_find_hole(size_t size, int align)
 	list_for_each(item, list){
 		struct header* entry = list_entry(item, struct header, link);
 		if( entry->magic != STEWIEOS_HEAP_MAGIC ){
-			printk("%2Vheap_find_hole: bad magic number for heap header %p!\n", entry);
+			printk("%2Vheap_find_hole: bad magic number for heap header %p!\n\tsystem halted.", entry);
+			asm volatile ("cli;hlt");
 			return NULL;
 		}
 		// don't go any further, this entyr can't hold our data

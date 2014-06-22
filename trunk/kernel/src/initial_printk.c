@@ -11,6 +11,8 @@
 #define P_PREFIX	0x40		// Use 0,0x,and 0X prefixes
 #define P_UPPER		0x80		// use uppercase for hex digits
 
+#define STEWIEOS_TAB_WIDTH 5
+
 /* struct: monitor_info
  * purpose:
  * 	encapsulates the state of the VGA textmode console
@@ -422,6 +424,16 @@ static void put_char(char c, int flags, int width, int precision)
 			monitor.screen[CURSOR_INDEX(monitor)+1] = monitor.color;
 		} // end if monitor.cx != 0
 	} // end if c == '\b'
+	
+	// \t escape character (tab)
+	if( c == '\t' )
+	{
+		if( (monitor.width-monitor.cx) < STEWIEOS_TAB_WIDTH ){
+			monitor.cx = monitor.width;
+		} else {
+			monitor.cx += STEWIEOS_TAB_WIDTH;
+		}
+	}
 	
 	// printable character
 	if( c >= ' ' ){
