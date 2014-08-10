@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "block.h"
 
 struct file* file_open(struct path* path, int flags)
 {
@@ -68,7 +69,12 @@ struct file* file_open(struct path* path, int flags)
 	
 	path_copy(&file->f_path, path);
 	
-	file->f_ops = path->p_dentry->d_inode->i_default_fops;
+	if( S_ISBLK(path->p_dentry->d_inode->i_mode) )
+	{
+		file->f_ops = &block_device_fops;
+	} else {
+		file->f_ops = path->p_dentry->d_inode->i_default_fops;
+	}
 	
 	if( file->f_ops->open ){
 		result = file->f_ops->open(file, file->f_path.p_dentry, flags);
@@ -112,6 +118,23 @@ ssize_t file_read(struct file* file, void* buf, size_t count)
 	}
 	
 	return file->f_ops->read(file,(char*)buf, count);
+}
+
+int file_readdir(struct file* file, struct dirent* dirent, size_t count)
+{
+	if( !S_ISDIR(file_inode(file)->i_mode & S_IFDIR) ){
+		return -ENOTDIR;
+	}
+	
+	if( !((file->f_status+1) & _FREAD) ){
+		return -EINVAL;
+	}
+	
+	if( !file->f_ops->readdir ){
+		return -EINVAL;
+	}
+	
+	return file->f_ops->readdir(file, dirent, count);
 }
 
 ssize_t file_write(struct file* file, const void* buf, size_t count)

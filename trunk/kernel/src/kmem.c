@@ -401,7 +401,7 @@ void heap_kfree(void* data)
 	struct header* header = ((struct header*)( (char*)(data) - sizeof(struct header) ));
 	
 	if( header->magic != STEWIEOS_HEAP_MAGIC ){
-		printk("%2Vheap_kfree: corrupted heap header magic number!\nheap_kfree: aborting data deallocation (unstable pointer).");
+		printk("%2Vheap_kfree: corrupted heap header magic number!\nheap_kfree: aborting data deallocation (unstable pointer).\n");
 		return;
 	}
 

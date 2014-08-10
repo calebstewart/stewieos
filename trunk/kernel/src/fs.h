@@ -6,6 +6,7 @@
 // NOTE i need to implement this is in the standard library!
 //#include <dirent.h>
 #include "linkedlist.h"
+#include <dirent.h>
 
 // Filesystem flags
 #define FS_NODEV		0x00000001
@@ -20,13 +21,16 @@
 
 #define FS_MAX_OPEN_FILES TASK_MAX_OPEN_FILES
 
-#define FD_VALID(fd) ( (fd) > 0 && (fd) < FS_MAX_OPEN_FILES && (current->t_vfs.v_openvect[(fd)].flags & FD_OCCUPIED) && !(current->t_vfs.v_openvect[(fd)].flags & FD_INVALID) )
+#define FD_VALID(fd) ( (fd) >= 0 && (fd) < FS_MAX_OPEN_FILES && (current->t_vfs.v_openvect[(fd)].flags & FD_OCCUPIED) && !(current->t_vfs.v_openvect[(fd)].flags & FD_INVALID) )
 
 // walk_path flags
 #define WP_DEFAULT		0x00000000
 #define WP_PARENT		0x00000001
 
 #define filesystem_put_super(fs, super)		do{ if( (fs)->fs_ops->put_super ) (fs)->fs_ops->put_super((fs),super); } while(0)
+
+#define file_inode(filp) ((filp)->f_path.p_dentry->d_inode)
+#define file_dentry(filp) ((filep)->f_path.p_dentry)
 
 // Forward declerations for structures
 struct inode; 				// forward decl
@@ -71,7 +75,7 @@ struct file_operations
 	int(*close)(struct file*, struct dentry*);
 	ssize_t(*read)(struct file*, char*, size_t);
 	ssize_t(*write)(struct file*, const char*, size_t);
-	int(*readdir)(struct file*, struct dirent*);
+	int(*readdir)(struct file*, struct dirent*, size_t);
 	off_t(*lseek)(struct file*, off_t, int);
 	int(*ioctl)(struct file*, int, char*);
 	int(*fstat)(struct file*, struct stat*);
@@ -199,6 +203,7 @@ struct inode
 	ino_t				i_ino;			// Inode number
 	dev_t				i_dev;			// If this is a device file, the device id
 	// Filesystem data
+	void*				i_private;		// Private FS Data
 	size_t				i_ref;			// Reference counting
 	struct superblock*		i_super;		// pointer to the superblock this inode belongs to
 	list_t				i_sblink;		// Link in the superblocks inode list
@@ -340,6 +345,7 @@ ssize_t file_write(struct file* file, const void* buf, size_t count);
 off_t file_seek(struct file* file, off_t offsets, int whence);
 int file_ioctl(struct file* file, int request, char* argp);
 int file_stat(struct file* file, struct stat* buf);
+int file_readdir(struct file* file, struct dirent* dirent, size_t count);
 
 /* Unix System Call Definitions
  * 
@@ -365,6 +371,7 @@ int sys_chmod(const char* file, mode_t mode);
 int sys_chown(const char* path, uid_t owner, gid_t group);
 mode_t sys_umask(mode_t mask);
 int sys_mknod(const char* path, mode_t mode, dev_t dev);
+int sys_readdir(int fd, struct dirent* dirent, size_t count);
 
 void copy_task_vfs(struct vfs* dest, struct vfs* src);
 void init_task_vfs(struct vfs* vfs);
