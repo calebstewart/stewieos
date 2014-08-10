@@ -12,6 +12,15 @@ int strcmp( const char* s1, const char* s2)
 	return 0;
 }
 
+int strncmp( const char* s1, const char* s2, size_t n)
+{
+	for(; n > 0; --n, s1++, s2++){
+		if( *s1 != *s2 ) return (*s1 - *s2);
+		else if( *s1 == 0 ) return 0;
+	}
+	return 0;
+}
+
 char* strncpy( char* d, const char* s, size_t n)
 {
 	char* tmp = d;

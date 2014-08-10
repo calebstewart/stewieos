@@ -294,13 +294,17 @@ int path_lookup(const char* name, int flags, struct path* path)
 		// and return
 		if( slash == NULL )
 		{
+			// We only need the parent anyway
+			if( flags & WP_PARENT ) {
+				return 0;
+			}
 			struct dentry* dentry = path->p_dentry;
 			path->p_dentry = d_lookup(path->p_dentry, iter); // there's no slash, so just lookup the next item
 			d_put(dentry);
 			if( IS_ERR(path->p_dentry) ){
 				mnt_put(path->p_mount);
 				return PTR_ERR(path->p_dentry);
-			} else {
+			} else { 
 				break;
 			}
 		}
@@ -555,10 +559,12 @@ int sys_umount(const char* target_name, int flags)
 		return -EBUSY;
 	}
 	
-	result = super->s_fs->fs_ops->put_super(super->s_fs, super);
-	
-	if( result != 0 ){
-		return result;
+	if( super->s_fs->fs_ops->put_super )
+	{
+		result = super->s_fs->fs_ops->put_super(super->s_fs, super);
+		if( result != 0 ){
+			return result;
+		}
 	}
 	
 	// Remove the mount from its lists
@@ -818,6 +824,29 @@ ssize_t sys_write(int fd, const void* buf, size_t count)
 	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_write(file, buf, count);
+}
+
+/* function: sys_readdir
+ * purpose:
+ * 	read the next 'count' directory entries from the file
+ * 	descriptor.
+ * parameters:
+ * 	fd - the open file descriptor
+ * 	dirent - an array of directory entries at least 'count' long
+ * 	count - the number of directory entries to read
+ * return value:
+ * 	the number of directory entries read on success or a negative
+ * 	error value on failure.
+ */
+int sys_readdir(int fd, struct dirent* dirent, size_t count)
+{
+	if( !FD_VALID(fd) ){
+		return -EBADF;
+	}
+	
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	
+	return file_readdir(file, dirent, count);
 }
 
 /* function sys_lseek
@@ -1106,7 +1135,7 @@ char* basename(const char* path)
 	tmp = (char*)path;
 	while( tmp ){
 		slash = tmp;
-		tmp = strchr(slash, '/');
+		tmp = strchr(slash+1, '/');
 	}
 	// slash is a pointer to the last slash, add one
 	return slash+1;
@@ -1181,6 +1210,16 @@ struct inode* i_get(struct superblock* super, ino_t ino)
 {	
 	struct inode		*inode = NULL;			// the inode structure
 	int			 error = 0;			// the return error value
+	list_t			*iter = NULL;
+	
+	// check if it is already loaded
+	list_for_each(iter, &super->s_inode_list)
+	{
+		inode = list_entry(iter, struct inode, i_sblink);
+		if( inode->i_ino == ino ){
+			return i_getref(inode);
+		}
+	}
 	
 	// allocate the inode structure and clear its contents
 	inode = (struct inode*)kmalloc(sizeof(struct inode));

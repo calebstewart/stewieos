@@ -366,6 +366,8 @@ int initial_printk(const char* format, __builtin_va_list ap)
 					width = 0;
 				}
 				monitor.color = output_level_colors[width];
+			} else if( specifier == 'C' ){ // Specifier is to change the color
+				monitor.color = (char)((width&0x0F) | 0x00);
 			}
 			
 			

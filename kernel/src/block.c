@@ -26,11 +26,6 @@ static int block_file_fstat(struct file*, struct stat*);
 static ssize_t block_file_read(struct file*, char*, size_t);
 static ssize_t block_file_write(struct file*, const char*, size_t);
 
-static block_data_t* block_file_data(struct file* file);
-static int  block_file_data_sync(struct file* file);
-static void block_data_lock(block_data_t* data);
-static void block_data_unlock(block_data_t* data);
-
 struct block_device* vfs_dev[256];
 struct file_operations block_device_fops = {
 	.open = block_file_open,
@@ -53,17 +48,20 @@ int register_block_device(unsigned int major, unsigned int nminors, struct block
 			}
 		}
 	}
-	if( major >= 256 ) return -1;
-	if( vfs_dev[major] == NULL ) return -1;
+	if( major >= 256 ) return -EINVAL;
+	if( vfs_dev[major] != NULL ) return -EBUSY;
 	
 	struct block_device* dev = (struct block_device*)kmalloc(sizeof(struct block_device));
 	if(!dev){
-		return -1;
+		return -ENOMEM;
 	}
 	memset(dev, 0, sizeof(struct block_device));
 	
 	dev->ops = block_ops;
 	dev->nminors = nminors;
+	dev->blksz = 512;
+	dev->block = kmalloc(dev->blksz);
+	spin_init(&dev->lock);
 	
 	vfs_dev[major] = dev;
 	
@@ -110,13 +108,19 @@ struct block_device* get_block_device(dev_t devid)
 		return NULL;
 	}
 	
+	if( device->ops->exist ){
+		if( !device->ops->exist(device, devid) ){
+			return NULL;
+		}
+	}
+	
 	return device;
 }
 
 int block_attach(dev_t devid)
 {
 	struct block_device* device = get_block_device(devid);
-	if( !device ) return -1;
+	if( !device ) return -ENODEV;
 	if( device->ops->attach ){
 		int result = device->ops->attach(device);
 		return result;
@@ -135,27 +139,160 @@ int block_detach(dev_t devid)
 	return 0;
 }
 
-int block_read(dev_t devid, char* buffer, off_t lba)
+ssize_t block_read(dev_t devid, off_t off, size_t count, char* buffer)
 {
 	struct block_device* device = get_block_device(devid);
-	if( !device ) return -1;
-	if( device->ops->read ){
-		int result = device->ops->read(device, devid, buffer, lba);
-		return result;
+	int error = 0;
+	off_t lba, end_lba;
+	size_t requested_count = count; // count is decremented throughout the process
+	
+	if( !device ) return -ENODEV;
+	
+	if( !device->ops->read ){
+		return -ENOSYS;
 	}
-	return -1;
+	
+	// Aqcuire the data lock
+	spin_lock(&device->lock);
+	
+	// calculate the LBA values
+	lba = (off_t)(off / device->blksz);
+	end_lba = lba + (count / device->blksz);
+	if( (count % device->blksz) != 0 ){
+		end_lba++;
+	}
+	
+	if( (off % device->blksz) != 0 )
+	{
+		error = device->ops->read(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			spin_unlock(&device->lock);
+			return (ssize_t)error;
+		}
+		if( count > (device->blksz - (off % device->blksz)) )
+		{
+			memcpy(buffer, &device->block[off%device->blksz], device->blksz - (off%device->blksz));
+			buffer = buffer + (device->blksz - (off%device->blksz));
+			count -= (device->blksz - (off%device->blksz));
+		} else {
+			memcpy(buffer, &device->block[off%device->blksz], count);
+			spin_unlock(&device->lock);
+			return (ssize_t)count;
+		}
+		lba++;
+		off = lba*device->blksz;
+	}
+	
+	if( count >= device->blksz )
+	{
+		error = device->ops->read(device, devid, lba, count / device->blksz, buffer);
+		if( error != 0 ){
+			spin_unlock(&device->lock);
+			return (ssize_t)error;
+		}
+		lba += count / device->blksz;
+		buffer = buffer + ((size_t)(count / device->blksz))*device->blksz;
+		count -= ((size_t)(count / device->blksz))*device->blksz;
+	}
+	
+	if( count != 0 )
+	{
+		error = device->ops->read(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			spin_unlock(&device->lock);
+			return (ssize_t)error;
+		}
+		memcpy(buffer, device->block, count);
+	}
+	
+	spin_unlock(&device->lock);
+	
+	return (ssize_t)requested_count;
 }
 
-int block_write(dev_t devid, const char* buffer, off_t lba)
+int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 {
 	struct block_device* device = get_block_device(devid);
-	if( !device ) return -1;
-	if( device->ops->write ){
-		int result = device->ops->write(device, devid, buffer, lba);
-		return result;
+	int error = 0;
+	off_t lba, end_lba;
+	size_t requested_count = count; // count is decremented throughout the process
+	
+	if( !device ) return -ENODEV;
+	
+	if( !device->ops->write ){
+		return -ENOSYS;
 	}
-	return -1;
+	
+	// Aqcuire the data lock
+	spin_lock(&device->lock);
+	
+	if( count == 0 ){
+		return 0;
+	}
+	
+	lba = (off_t)(off / device->blksz);
+	end_lba = lba + (count / device->blksz);
+	if( (count % device->blksz) != 0 ){
+		end_lba++;
+	}
+	
+	// We need to modify a piece of a block
+	if( (off % device->blksz) != 0 )
+	{
+		// read in the entire block
+		error = device->ops->read(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			return (ssize_t)error;
+		}
+		// Copy the data into the block
+		if( count > (device->blksz - (off % device->blksz)) )
+		{
+			// we are writing more than just this block
+			memcpy(&device->block[off%device->blksz], buffer, device->blksz - (off%device->blksz));
+			buffer = buffer + (device->blksz - (off%device->blksz));
+			count -= (device->blksz - (off%device->blksz));
+		} else {
+			// we are only writing within this block
+			memcpy(&device->block[off%device->blksz], buffer, count);
+			count = 0;
+		}
+		// write the whole back to disk
+		error = device->ops->write(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			return (ssize_t)error;
+		}
+		lba++;
+		off = lba*device->blksz;
+	}
+	
+	// do we have block aligned writes to do? (that's prefered...)
+	if( count >= device->blksz )
+	{
+		error = device->ops->write(device, devid, lba, count / device->blksz, buffer);
+		if( error != 0 ){
+			return (ssize_t)error;
+		}
+		lba += count / device->blksz;
+		buffer = buffer + ((size_t)(count / device->blksz))*device->blksz;
+		count -= ((size_t)(count / device->blksz))*device->blksz;
+	}
+	
+	if( count != 0 )
+	{
+		error = device->ops->read(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			return (ssize_t)error;
+		}
+		memcpy(device->block, buffer, count);
+		error = device->ops->write(device, devid, lba, 1, device->block);
+		if( error != 0 ){
+			return (ssize_t)error;
+		}
+	}
+	
+	return (ssize_t)requested_count;
 }
+
 
 int block_ioctl(dev_t devid, int cmd, char* argp)
 {
@@ -202,25 +339,12 @@ int block_file_fstat(struct file* file, struct stat* stat)
 int block_file_open(struct file* file, struct dentry* dentry, int omode)
 {
 	UNUSED(omode);
+	UNUSED(file);
+	
 	int result = block_open(dentry->d_inode->i_dev);
 	if( result != 0 ){
 		return result;
 	}
-	
-	struct block_device* device = get_block_device(dentry->d_inode->i_dev);
-	if( device == NULL ){
-		return -ENODEV;
-	}
-	
-	file->f_private = (char*)kmalloc(sizeof(block_data_t));
-	file->f_off = 0;
-	block_data_t* data = block_file_data(file);
-	data->block = (char*)kmalloc(device->blksz);
-	data->dirty = 0;
-	data->dirty_block = 0;
-	spin_init(&data->lock);
-	
-	block_file_data_sync(file);
 	
 	return 0;
 }
@@ -228,131 +352,53 @@ int block_file_open(struct file* file, struct dentry* dentry, int omode)
 int block_file_close(struct file* file, struct dentry* dentry)
 {
 	UNUSED(dentry);
-	kfree(file->f_private);
 	return block_close(file->f_path.p_dentry->d_inode->i_dev);
 }
 
-block_data_t* block_file_data(struct file* file)
-{
-	return (block_data_t*)file->f_private;
-}
-
-void block_data_lock(block_data_t* data)
-{
-	spin_lock(&data->lock);
-}
-
-void block_data_unlock(block_data_t* data)
-{
-	spin_unlock(&data->lock);	
-}
-
-int block_file_data_sync(struct file* file)
-{
-	block_data_t* data = block_file_data(file);
-	dev_t devid = file->f_path.p_dentry->d_inode->i_dev;
-	struct block_device* device = get_block_device(devid);
-	int result = 0;
-	
-	if( (file->f_off%device->blksz) == 0 )
-	{
-		// if data was written to the buffer, flush it to the device
-		if( data->dirty ){
-			block_write(devid, data->block, data->dirty_block);
-			data->dirty = 0;
-		}
-		if( (result = block_read(devid, data->block, file->f_off%device->blksz)) != 0 ){
-			return result;
-		}
-		data->dirty_block = file->f_off%device->blksz;
-	}
-	return 0;
-}
-
+/* function: block_file_read
+ * purpose: read a block device as a file on the byte level
+ * 		This can be tricky due to block alignments and
+ * 		funny shifts you have to do. The function reads
+ * 		from file->f_off and modifies it directly.
+ * parameters:
+ * 	file - the file we are reading from
+ * 	buffer - the buffer to read into
+ * 	count - the number of bytes to read
+ * returns:
+ * 	The number of bytes successfully read or an error value.
+ */
 ssize_t block_file_read(struct file* file, char* buffer, size_t count)
 {
 	dev_t devid = file->f_path.p_dentry->d_inode->i_dev;
-	struct block_device* device = get_block_device(devid);
-	size_t nread = 0;
-	int result = 0;
-	block_data_t* data = block_file_data(file);
-
-	// invalid device
-	if( !device ){
-		return (ssize_t)-ENODEV;
-	}	
-	// we don't need to read for that...
-	if( count == 0 ) {
-		return 0;
+	ssize_t result = block_read(devid, file->f_off, count, buffer);
+	
+	if( result > 0 ){
+		file->f_off += result;
 	}
 	
-	block_data_lock(data);
-	
-	// read all the requested bytes
-	while( count > 0 )
-	{
-		// this will synchronize the buffered data->block with the current file->f_off
-		// If this is the end of the disk or there was a read error, it will return an
-		// error code
-		if( (result = block_file_data_sync(file)) != 0 ){
-			break;
-		}
-		*buffer = data->block[file->f_off%device->blksz]; // read the next byte
-		file->f_off++;
-		nread++;
-		buffer++;
-	}
-	
-	block_data_unlock(data);
-	
-	if( result < 0 ){
-		nread = (ssize_t)result;
-	}
-	
-	return nread;
+	return result;
 }
 
+/* function: block_file_write
+ * purpose: write to a block device as a file on the byte level
+ * 		This can be tricky due to block alignments and
+ * 		funny shifts you have to do. The function writes
+ * 		from file->f_off and modifies it directly.
+ * parameters:
+ * 	file - the file we are writing to
+ * 	buffer - the data to write
+ * 	count - the number of bytes to write (same as length of buffer)
+ * returns:
+ * 	The number of bytes successfully written or an error value.
+ */
 ssize_t block_file_write(struct file* file, const char* buffer, size_t count)
 {
 	dev_t devid = file->f_path.p_dentry->d_inode->i_dev;
-	struct block_device* device = get_block_device(devid);
-	size_t nwritten = 0;
-	int result = 0;
-	block_data_t* data = block_file_data(file);
-
-	// invalid device
-	if( !device ){
-		return (ssize_t)-ENODEV;
-	}	
-	// we don't need to read for that...
-	if( count == 0 ) {
-		return 0;
+	ssize_t result = block_write(devid, file->f_off, count, buffer);
+	
+	if( result > 0 ){
+		file->f_off += result;
 	}
 	
-	block_data_lock(data);
-	
-	// read all the requested bytes
-	while( count > 0 )
-	{
-		// this will synchronize the buffered data->block with the current file->f_off
-		// If this is the end of the disk or there was a read error, it will return an
-		// error code
-		if( (result = block_file_data_sync(file)) != 0 ){
-			break;
-		}
-		// when we fill this buffered block or close the file it will sync to the device
-		data->block[file->f_off%device->blksz] = *buffer; // write the next byte
-		data->dirty = 1;
-		file->f_off++;
-		nwritten++;
-		buffer++;
-	}
-	
-	block_data_unlock(data);
-	
-	if( result < 0 ){
-		nwritten = (ssize_t)result;
-	}
-	
-	return nwritten;
+	return result;
 }
