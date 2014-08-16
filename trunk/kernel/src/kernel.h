@@ -12,6 +12,10 @@
 #define UNUSED(var) do{ (void)var; } while(0)
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 
+#define MODULE_VISIBLE __attribute__((section(".module_visible")))
+
+#define g_multiboot (*((multiboot_info_t**)(&initial_stack[8184])))
+
 /* Vendor-strings. */
 #define CPUID_VENDOR_OLDAMD       "AMDisbetter!" //early engineering samples of AMD K5 processor
 #define CPUID_VENDOR_AMD          "AuthenticAMD"
@@ -123,6 +127,8 @@ typedef signed short	s16;
 typedef unsigned int	u32;
 typedef signed int	s32;
 typedef unsigned int	uint;
+
+extern char initial_stack[];
 
 int printk(const char* format, ...);
 int printk_at(unsigned int pos, const char* format, ...);

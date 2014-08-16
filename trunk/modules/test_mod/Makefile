@@ -9,7 +9,8 @@ WARNINGS:= -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion
 CFLAGS:=-std=gnu99 -nostdlib -nostartfiles -gdwarf-2 -g3 $(WARNINGS) -I$(KERNEL_DIR)/src
-LDFLAGS:= -r -nostdlib -Wl,-R,$(STEWIEOS_CURRENT)
+#LDFLAGS:= -r -nostdlib -Wl,-R,$(STEWIEOS_CURRENT)
+LDFLAGS:= -r -nostdlib
 
 CC:=i586-pc-stewieos-gcc
 LD:=i586-pc-stewieos-gcc
@@ -26,7 +27,7 @@ all: $(PROJECT_NAME)
 $(PROJECT_NAME): $(OUTPUT_FILE)
 
 install:
-	cp $(OUTPUT_FILE) $(MODULE_INSTALL_DIR)
+	strip -S -o $(MODULE_INSTALL_DIR)/$(PROJECT_NAME).o $(OUTPUT_FILE)
 
 clean:
 	rm -f $(OBJFILES) $(OUTPUT_FILE)

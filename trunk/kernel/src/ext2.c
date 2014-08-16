@@ -358,6 +358,9 @@ int e2_file_close(struct file* file, struct dentry* dentry)
 
 ssize_t e2_file_read(struct file* file, char* buffer, size_t count)
 {
+	if( file->f_off >= file_inode(file)->i_size ){
+		return 0;
+	}
 	ssize_t completed = e2_read_inode_data(file_inode(file)->i_super, file_inode(file), file->f_off, count, buffer);
 	if( completed < 0 ){
 		return completed;

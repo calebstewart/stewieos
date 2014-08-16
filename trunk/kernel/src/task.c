@@ -1,7 +1,7 @@
 #include "task.h"
 #include <errno.h>
 
-extern u32 		initial_stack;		// defined in start.s
+//extern u32 		initial_stack;		// defined in start.s
 struct task		*current = NULL;	// always points to the current task
 list_t			ready_tasks;		// list of ready tasks
 list_t			task_globlist;		// global list of all tasks
@@ -78,29 +78,29 @@ void task_init( void )
 	}
 	
 	// copy the memory from the old stack
-	memcpy((void*)(TASK_KSTACK_ADDR), &initial_stack, TASK_KSTACK_SIZE);
+	memcpy((void*)(TASK_KSTACK_ADDR), initial_stack, TASK_KSTACK_SIZE);
 	// now we need to find and fix all the EBP values on the stack
 	// First, get the current ESP
 	asm volatile ("mov %%esp,%0" :"=r"(old_stack));
 	// Then Calculate the new esp based on initial_stack and old_stack and stack size.
-	new_stack = (u32*)( (u32)old_stack - (u32)(&initial_stack) + TASK_KSTACK_ADDR );
+	new_stack = (u32*)( (u32)old_stack - (u32)(initial_stack) + TASK_KSTACK_ADDR );
 	// iterate through every item on the stack, if the item has a value
 	// within the old stack, adjust it to the new stac. It could be a false
 	// positive, but it is the best we can do with a blind stack move.
 	for(; (u32)new_stack < (TASK_KSTACK_ADDR+TASK_KSTACK_SIZE); new_stack = (u32*)((u32)new_stack + 4))
 	{
-		if( *new_stack >= (u32)&initial_stack && *new_stack < ((u32)&initial_stack + TASK_KSTACK_SIZE) )
+		if( *new_stack >= (u32)initial_stack && *new_stack < ((u32)initial_stack + TASK_KSTACK_SIZE) )
 		{
-			*new_stack = *new_stack - (u32)&initial_stack + TASK_KSTACK_ADDR;
+			*new_stack = *new_stack - (u32)initial_stack + TASK_KSTACK_ADDR;
 		}
 	}
 	
 	// Get the current EBP
 	asm volatile("mov %%ebp,%0":"=r"(old_base));
 	// Calculate the new base address based on the old base adddress
-	new_base = (u32*)( (u32)old_base - (u32)(&initial_stack) + TASK_KSTACK_ADDR );
+	new_base = (u32*)( (u32)old_base - (u32)(initial_stack) + TASK_KSTACK_ADDR );
 	// Calculate the new stack address based on the old stack address
-	new_stack = (u32*)( (u32)old_stack - (u32)(&initial_stack) + TASK_KSTACK_ADDR );
+	new_stack = (u32*)( (u32)old_stack - (u32)(initial_stack) + TASK_KSTACK_ADDR );
 	// load the new stack pointer and base pointer
 	asm volatile("mov %0,%%ebp; mov %1,%%esp"::"r"(new_base), "r"(new_stack));
 	

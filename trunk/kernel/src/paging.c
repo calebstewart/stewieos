@@ -37,6 +37,14 @@ void init_paging( multiboot_info_t* mb )
 		}
 	}
 	
+	if( mb->flags & MULTIBOOT_INFO_ELF_SHDR )
+	{
+		mb->u.elf_sec.addr += KERNEL_VIRTUAL_BASE;
+		if( (mb->u.elf_sec.addr + (mb->u.elf_sec.num*mb->u.elf_sec.size)) > placement_address ){
+			placement_address = (mb->u.elf_sec.addr + (mb->u.elf_sec.num*mb->u.elf_sec.size));
+		}
+	}
+	
 	physical_frame_count = memory_size / 0x1000; // number of frames
 	physical_frame = kmalloc((size_t)(physical_frame_count / 8));
 	memset(physical_frame, (int)0xFFFFFFFF, physical_frame_count/8);
