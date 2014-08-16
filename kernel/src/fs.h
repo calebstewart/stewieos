@@ -30,7 +30,7 @@
 #define filesystem_put_super(fs, super)		do{ if( (fs)->fs_ops->put_super ) (fs)->fs_ops->put_super((fs),super); } while(0)
 
 #define file_inode(filp) ((filp)->f_path.p_dentry->d_inode)
-#define file_dentry(filp) ((filep)->f_path.p_dentry)
+#define file_dentry(filp) ((filp)->f_path.p_dentry)
 
 // Forward declerations for structures
 struct inode; 				// forward decl

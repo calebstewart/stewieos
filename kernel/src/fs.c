@@ -319,6 +319,8 @@ int path_lookup(const char* name, int flags, struct path* path)
 			return PTR_ERR(child);
 		}
 		
+		iter = slash+1;
+		
 		// Reuse the mount
 		d_put(path->p_dentry);
 		path->p_dentry = child;

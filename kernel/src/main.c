@@ -92,6 +92,8 @@ void multitasking_entry( multiboot_info_t* mb )
 {
 	printk("done.\n");
 	
+	elf_register();
+	
 	initfs_install(mb);
 	
 	printk("INIT: loading module 'ide.o'\n");
@@ -176,8 +178,26 @@ void multitasking_entry( multiboot_info_t* mb )
 		sys_close(fd);
 	}
 	
-	fd = sys_open("/node", O_RDONLY, 0);
+	printk("INIT: opening /test_file...\n");
+	fd = sys_open("/test_file", O_RDONLY, 0);
+	if( fd < 0 ){
+		printk("INIT: unable to open /test_file. error code %d\n", fd);
+		return;
+	}
+	
+	printk("INIT: test_file contents:\n");
+	char chr = 0;
+	while( sys_read(fd, &chr, 1) > 0 ){
+		printk("%c", chr);
+	}
+	
+	printk("\nINIT: closing /test_file...\n");
 	sys_close(fd);
+	
+	error = sys_insmod("/bin/test_mod.o");
+	if( error != 0 ){
+		printk("INIT: unable to load module. error code %d\n", error);
+	}
 	
 	printk("INIT: Finished.\n");
 	

@@ -20,22 +20,6 @@ typedef struct _exec
 	void* private;		// Private loader data
 } exec_t;
 
-/* type: exec_type_t
- * purpose: holds functions for loading different types of
- * 	executables
- */
-struct _exec_type;
-typedef struct _exec_type exec_type_t;
-struct _exec_type
-{
-	const char* name;
-	const char* descr;
-	int(*load_exec)(exec_t*);
-	int(*load_module)(exec_t*);
-	
-	exec_type_t* next;
-};
-
 /* type: module_t
  * purpose: holds module data including loading, and unloading functions
  */
@@ -50,6 +34,22 @@ struct _module
 	int m_refs;			// Number of references currently held throughout the system
 	
 	list_t m_link;			// Link in the kernel module list
+};
+
+/* type: exec_type_t
+ * purpose: holds functions for loading different types of
+ * 	executables
+ */
+struct _exec_type;
+typedef struct _exec_type exec_type_t;
+struct _exec_type
+{
+	const char* name;
+	const char* descr;
+	int(*load_exec)(exec_t*);
+	module_t*(*load_module)(struct file*);
+	
+	exec_type_t* next;
 };
 
 // Load a new executable from the given file

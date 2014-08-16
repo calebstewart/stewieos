@@ -116,63 +116,6 @@ int load_exec(const char* filename, char** argv, char** envp)
 	return ENOEXEC;
 }
 
-int load_module(const char* filename)
-{
-	struct path path;
-	exec_t* exec = NULL;
-	int error = 0;
-	
-	// Lookup the path from the filename
-	error = path_lookup(filename, WP_DEFAULT, &path);
-	// Did the file exist?
-	if( error != 0 ){
-		return error;
-	}
-	
-	// Open the file
-	struct file* filp = file_open(&path, O_RDONLY);
-	// We don't need the path reference anymore
-	path_put(&path);
-	
-	// Could the file be opened?
-	if( IS_ERR(filp) ){
-		return PTR_ERR(filp);
-	}
-	
-	// Allocate the executable structure and clear it
-	exec = (exec_t*)kmalloc(sizeof(exec_t));
-	memset(exec, 0, sizeof(exec_t));
-	
-	// put the file pointer in the exec structure
-	exec->file = filp;
-	
-	// Fill the read buffer
-	file_read(filp, exec->buffer, 256);
-	
-	// Check all types. Load the executable using the first acceptable type.
-	exec_type_t* type = g_exec_type;
-	while( type != NULL )
-	{
-		// a type can implement load_exec, load_module, or both.
-		if( type->load_module )
-		{
-			// Try and load the executable
-			error = type->load_module(exec);
-			// If it was successfull, we wouldn't return.
-			// If it isn't the right format, we return 0
-			// If it is the right format but there was an
-			// 	error, we return an error value.
-			if( error != 0 ){
-				close_exec(exec);
-				return error;
-			}
-		}
-		type = type->next;
-	}
-	
-	return ENOEXEC;
-}
-
 void close_exec(exec_t* exec)
 {
 	file_close(exec->file);
@@ -191,6 +134,7 @@ int sys_insmod(const char* filename)
 {
 	struct path path;
 	int error = 0;
+	module_t* module = NULL;
 	
 	// Lookup the path from the filename
 	error = path_lookup(filename, WP_DEFAULT, &path);
@@ -209,29 +153,24 @@ int sys_insmod(const char* filename)
 		return PTR_ERR(filp);
 	}
 	
-	// Grab the file_info (for size)
-	struct stat file_info;
-	file_stat(filp, &file_info);
-	
-	// Allocate space for the file data
-	void* file_data = kmalloc(file_info.st_size);
-	if( !file_data ){
-		file_close(filp);
-		return -ENOMEM;
+	exec_type_t* etype = g_exec_type;
+	while( etype )
+	{
+		if( etype->load_module )
+		{
+			module = etype->load_module(filp);
+			if( !IS_ERR(module) ){
+				break;
+			} else if( module != NULL ){ // it was the right type, something else went wrong
+				return PTR_ERR(module);
+			}
+		}
+		etype = etype->next;
 	}
 	
-	// Read in the file data
-	file_seek(filp, 0, SEEK_SET);
-	file_read(filp, file_data, file_info.st_size);
-	
-	// Close the file
-	file_close(filp);
-	
-	module_t* module = elf_init_module(file_data, file_info.st_size);
-	
-	if( IS_ERR(module) ){
-		kfree(file_data);
-		return PTR_ERR(module);
+	if( module == NULL ){
+		file_close(filp);
+		return -ENOEXEC;
 	}
 	
 	INIT_LIST(&module->m_link);

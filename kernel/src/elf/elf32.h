@@ -392,9 +392,11 @@ int elf_check_file(struct file* file);
 // Load the file as an executable into memory
 int elf_load_exec(exec_t* exec);
 // Load the file as a loadable module into the kernel
-int elf_load_module(exec_t* file);
+module_t* elf_load_module(struct file* file);
 // Load the file as a shared library
 int elf_load_shared(struct file* file);
+
+void elf_register(void);
 
 // Global Variable Definitions
 
@@ -403,6 +405,7 @@ extern Elf32_Word g_shdr_num;
 extern Elf32_Shdr* g_shdr;
 extern Elf32_Shdr* g_symhdr;
 extern Elf32_Sym* g_symtab;
+extern char* g_strtab;
 extern Elf32_Shdr* g_shstrhdr;
 extern char* g_shstrtab;
 
