@@ -149,7 +149,7 @@ void multitasking_entry( multiboot_info_t* mb )
 	printk("INIT: mounting /hda1 to /...\n");
 	error = sys_mount("/hda1", "/", "ext2", MS_RDONLY, NULL);
 	if( error != 0 ){
-		printk("%2VINIT: error: unable to mount device. error code %d\n");
+		printk("%2VINIT: error: unable to mount device. error code %d\n", error);
 		return;
 	}
 	
@@ -160,7 +160,7 @@ void multitasking_entry( multiboot_info_t* mb )
 	if( fd < 0 ){
 		printk("INIT: unable to open /. error code %d\n", fd);
 	} else {
-		printk("INIT: opened / successfully!\n%-6s\tFile Name\n", "Inode");
+		printk("INIT: opened / successfully!\nDirectory Listing:\n%-6s\tFile Name\n", "Inode");
 		struct dirent dirent;
 		while( (error = sys_readdir(fd, &dirent, 1)) == 1 )
 		{

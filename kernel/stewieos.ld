@@ -19,7 +19,7 @@ SECTIONS
 
 	. += KERNEL_VIRTUAL_BASE;
 
-	.text . : AT(ADDR(.text) - 0xC0000000)
+	.text ALIGN(0x1000) : AT(ADDR(.text) - 0xC0000000)
 	{
 		code = .; _code = .; __code = .;
 		*(.text)
@@ -34,7 +34,7 @@ SECTIONS
 		_end_data = .;
 	}
 	
-	.bss ALIGN(4) : AT(ADDR(.bss) - 0xC0000000)
+	.bss ALIGN(0x1000) : AT(ADDR(.bss) - 0xC0000000)
 	{
 		bss = .; _bss = .; __bss = .;
 		*(.bss)

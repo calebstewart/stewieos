@@ -238,14 +238,30 @@ int ide_initialize( void )
 					} else {
 						printk("ide: device%d: bootsector signature validated.\n", ndevs);
 						for(int p = 0; p < 4; ++p){
-							if( !ata_check_partition(&ide_buffer[0x1BE + p*16]) ){
+							struct _real_part {
+								u8 unused0;
+								u16 unused1;
+								u8 sysid;
+								u8 unused2;
+								u16 unused3;
+								u32 lba_start;
+								u32 lba_end;
+							}* part = (struct _real_part*)(&ide_buffer[0x1BE + p*16]);
+							//printk("ide: device%d: partition%d: lba_start=0x%X, lba_end=0x%X, system-id=0x%X\n", ndevs, p+1, part->lba_start, part->lba_end, part->sysid);
+							if( part->unused0 == 0 && part->unused1 == 0 && part->sysid == 0 \
+								&& part->unused2 == 0 && part->unused3 == 0 && part->lba_start == 0 \
+								&& part->lba_end == 0 ){
 								ide_device[ndevs].part[p+1].valid = 0;
 								continue;
 							}
+// 							if( !ata_check_partition(&ide_buffer[0x1BE + p*16]) ){
+// 								ide_device[ndevs].part[p+1].valid = 0;
+// 								continue;
+// 							}
 							ide_device[ndevs].part[p+1].valid = 1;
-							ide_device[ndevs].part[p+1].lba_start = *((u32*)( &ide_buffer[0x1BE + p*16 + 8] ));
-							ide_device[ndevs].part[p+1].lba_end = ide_device[ndevs].part[p+1].lba_start + *((u32*)( &ide_buffer[0x1BE + p*16 + 12] ));
-							ide_device[ndevs].part[p+1].sysid = ide_buffer[0x1BE + p*16 + 4];
+							ide_device[ndevs].part[p+1].lba_start = part->lba_start; //*((u32*)( &ide_buffer[0x1BE + p*16 + 8] ));
+							ide_device[ndevs].part[p+1].lba_end = part->lba_start + part->lba_end; //ide_device[ndevs].part[p+1].lba_start + *((u32*)( &ide_buffer[0x1BE + p*16 + 12] ));
+							ide_device[ndevs].part[p+1].sysid = part->sysid; //ide_buffer[0x1BE + p*16 + 4];
 							printk("ide: device%d: partition%d: lba_start=0x%X, lba_end=0x%X, system-id=0x%X\n", ndevs, p+1, ide_device[ndevs].part[p+1].lba_start, ide_device[ndevs].part[p+1].lba_end, ide_device[ndevs].part[p+1].sysid);
 						}	
 					}

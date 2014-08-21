@@ -17,6 +17,7 @@ typedef struct _exec
 	struct file* file;	// The file this executable is read from
 	char** argv;		// Argument List
 	char** envp;		// Environment List
+	void* entry;		// The Entry Address
 	void* private;		// Private loader data
 } exec_t;
 
@@ -46,7 +47,42 @@ struct _exec_type
 {
 	const char* name;
 	const char* descr;
+	
+	/* function: load_exec
+	 * parameters:
+	 * 	exec_t* - The executable structure holding file and parameter information
+	 * return value:
+	 * 	Returns 1 on successfull loading of the executable
+	 * 	Returns 0 if the executable was not of this type
+	 * 	Returns negative error values if the file was of this type, but contained errors
+	 */
 	int(*load_exec)(exec_t*);
+	/* function: read_page
+	 * parameters:
+	 * 	exec_t* - The executable structure currently being executed
+	 * 	void* - the page to be read
+	 * return values:
+	 * 	Returns 1 if the page was read successfully
+	 * 	Returns 0 if the page did not exist within the executable
+	 * 	Returns negative error values if there was an error reading the file
+	 * notes:
+	 * 	This function is optional. You only need it if you are implementing "load on request"
+	 * 	style program loading.
+	 */
+	int(*read_page)(exec_t*,void*);
+	/* function: load_module
+	 * parameters:
+	 * 	struct file* - the file to load from
+	 * return values:
+	 * 	Returns NULL if the file was not of this type
+	 * 	Returns a module_t structure on success
+	 * 	Returns a negative error value (see IS_ERR/PTR_ERR) if the file was of this type but had problems
+	 * notes:
+	 * 	You should fully load and link the module in one kmalloc'd memory
+	 * 	block, and return a module_t structure from within the block (it should
+	 * 	be part of the memory image). The module_t structure should have all callbacks
+	 * 	and module pointers filled in (reference counting and lists can be empty).
+	 */
 	module_t*(*load_module)(struct file*);
 	
 	exec_type_t* next;
@@ -64,6 +100,8 @@ int remove_module(const char* name);
 int sys_insmod(const char* filename);
 // Remove module from the kernel
 int sys_rmmod(const char* module_name);
+// Execute a file
+int sys_execve(const char* filename, char* const argv[], char* const envp[]);
 
 // Call this function to close the executable and free all memory associated
 // You should not use or dereference the pointer after calling this function.

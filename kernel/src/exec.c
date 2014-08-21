@@ -7,6 +7,7 @@
 #include "kmem.h"
 #include "unistd.h"
 #include "elf/elf32.h"
+#include "paging.h"
 
 exec_type_t* g_exec_type = NULL;
 list_t g_module_list = LIST_INIT(g_module_list);
@@ -54,7 +55,7 @@ int rem_module(module_t* module)
 		associated things, but I need to write the loading
 		function so I know what the removing looks like :P
 	*/
-	
+	kfree(module->m_loadaddr);
 	
 	return 0;
 }
@@ -64,6 +65,8 @@ int load_exec(const char* filename, char** argv, char** envp)
 	struct path path;
 	exec_t* exec = NULL;
 	int error = 0;
+	page_dir_t* dir = NULL;
+	page_dir_t* old_dir __attribute__((unused)) = curdir;
 	
 	// Lookup the path from the filename
 	error = path_lookup(filename, WP_DEFAULT, &path);
@@ -92,7 +95,36 @@ int load_exec(const char* filename, char** argv, char** envp)
 	exec->envp = envp;
 	
 	// Fill the read buffer
+	file_seek(filp, 0, SEEK_SET);
 	file_read(filp, exec->buffer, 256);
+	
+	// Count the arguments
+	u32 argc = 0;
+	u32 argsz = 0;
+	for(; argv[argc]; argc++){
+		argsz += strlen(argv[argc]) + 1;
+	}
+	// Count the environment
+	u32 envc = 0;
+	u32 envsz = 0;
+	for(; envp[envc]; envc++){
+		envsz += strlen(envp[envc]) + 1;
+	}
+	
+	// Enough room for the arrays and the strings themselves
+	size_t total_argsz = argsz + envsz + sizeof(char*)*(envc+1) + sizeof(char*)*(argc+1);
+	void* argtemp = kmalloc(total_argsz);
+	if( argtemp == NULL ){
+		file_close(filp);
+		kfree(exec);
+		return -ENOMEM;
+	}
+	
+	// Create an empty page directory
+	dir = copy_page_dir(kerndir);
+	switch_page_dir(dir);
+	
+	
 	
 	// Check all types. Load the executable using the first acceptable type.
 	exec_type_t* type = g_exec_type;
