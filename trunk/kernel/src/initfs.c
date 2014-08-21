@@ -113,22 +113,24 @@ int initfs_read_super(struct filesystem* fs, struct superblock* super, dev_t dev
 {
 	UNUSED(fs); UNUSED(devid); UNUSED(flags);
 	multiboot_info_t* mb = (multiboot_info_t*)data;
+	multiboot_module_t* modlist = NULL;
 	
 	// was the bootloader configured to give us modules?
 	if( !(mb->flags & MULTIBOOT_INFO_MODS) ){
-		printk("multiboot: 0x%08X\nflags: 0x%X", mb, mb->flags);
-		return -ENODEV;
-	}
-	
-	multiboot_module_t* modlist = (multiboot_module_t*)(mb->mods_addr);
-	
-	// The kernel shifts the main multiboot structure pointers for
-	// the higher half, but does not recurse into sub-structures.
-	// We need to fix our own structures.
-	for(multiboot_uint32_t i = 0; i < mb->mods_count; ++i){
-		modlist[i].mod_start += KERNEL_VIRTUAL_BASE;
-		modlist[i].mod_end += KERNEL_VIRTUAL_BASE;
-		modlist[i].cmdline += KERNEL_VIRTUAL_BASE;
+		printk("initfs: warning: no modules found (flags: 0x%X).\n", mb->flags);
+		//return -ENODEV;
+		mb->mods_count = 0;
+	} else {
+		modlist = (multiboot_module_t*)(mb->mods_addr);
+		
+		// The kernel shifts the main multiboot structure pointers for
+		// the higher half, but does not recurse into sub-structures.
+		// We need to fix our own structures.
+		for(multiboot_uint32_t i = 0; i < mb->mods_count; ++i){
+			modlist[i].mod_start += KERNEL_VIRTUAL_BASE;
+			modlist[i].mod_end += KERNEL_VIRTUAL_BASE;
+			modlist[i].cmdline += KERNEL_VIRTUAL_BASE;
+		}
 	}
 	
 	struct initfs_private* priv = (struct initfs_private*)kmalloc(sizeof(struct initfs_private));

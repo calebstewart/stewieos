@@ -261,7 +261,17 @@ void page_fault(struct regs* regs)
 	int reserved = regs->err & 0x8;
 	//int id = regs->err & 0x10;
 	
-	printk("%2VPAGE FAULT ( %s%s%s%s)\n\tAddress: %p", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
+	printk("%2VPAGE FAULT ( %s%s%s%s)\nAddress: %p", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
+	printk("%2VError Code: 0x%X\n", regs->err);
+	printk("%2VEFLAGS: 0x%X\n", regs->eflags);
+	printk("%2VEIP: 0x%X\n", regs->eip);
+	u32 cr0, cr3;
+	asm volatile ("movl %%cr0,%0;": "=r"(cr0));
+	asm volatile ("movl %%cr3,%0;": "=r"(cr3));
+	printk("%2VCR0: 0x%X\n", cr0);
+	printk("%2VCR3: 0x%X\n", cr3);
+	printk("%2VCS: 0x%X\nDS: 0x%X\n", regs->cs, regs->ds);
+	
 	while(1);
 }
 
