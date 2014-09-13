@@ -5,6 +5,8 @@
 #include "descriptor_tables.h"
 #include "multiboot.h"
 
+#define VADDR(t, p, o)	(((0x3ff & t) << 22) | ((0x3ff & p) << 12) | (o & 0xfff))
+
 typedef struct page
 {
 	u32 present		: 1;	// Is this page entry present?
@@ -101,6 +103,8 @@ void unmap_page(page_dir_t* dir, void* virt);
  */
 page_dir_t* copy_page_dir(page_dir_t* dir);
 
+void free_page_dir(page_dir_t* dir);
+
 /*! \brief Copy a page table and its contents
  * 
  * A function taking a dst and src directory and copying the given
@@ -112,6 +116,8 @@ page_dir_t* copy_page_dir(page_dir_t* dir);
  * \see paging.h copy_page_dir
  */
 int copy_page_table(page_dir_t* dest, page_dir_t* srce, int tbl);
+
+int strip_page_dir(page_dir_t* dir);
 
 
 /*! \brief Translate a virtual to physical address.

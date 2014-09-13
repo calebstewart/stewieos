@@ -2,6 +2,7 @@
 #include "kmem.h"
 #include "pmm.h"
 #include "elf/elf32.h"
+#include "task.h"
 
 page_dir_t* kerndir = NULL;
 page_dir_t* curdir = NULL;
@@ -86,8 +87,8 @@ void init_paging( multiboot_info_t* mb )
 	while( i < placement_address )
 	{
 		// identity map as well as higher half map
-		page_t* page_low = get_page((void*)i, 1, kerndir);
-		page_t* page_hi = get_page((void*)(i-KERNEL_VIRTUAL_BASE), 1, kerndir);
+		page_t* page_hi = get_page((void*)i, 1, kerndir);
+		page_t* page_low = get_page((void*)(i-KERNEL_VIRTUAL_BASE), 1, kerndir);
 		reserve_frame(i-KERNEL_VIRTUAL_BASE);
 		page_hi->present = 1;
 		page_hi->user = 1;
@@ -108,6 +109,13 @@ void init_paging( multiboot_info_t* mb )
 	//switch_page_dir(curdir);
 	
 	initial_switch_dir((void*)curdir->phys);
+	
+	for( u32 a = 0x00100000; a < KERNEL_VIRTUAL_BASE; a += 0x1000){
+		page_t* page = get_page((void*)a, 0, kerndir);
+		if( !page ) continue;
+		page->present = 0;
+		page->frame = 0;
+	}
 	
 	init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
 }
@@ -261,7 +269,10 @@ void page_fault(struct regs* regs)
 	int reserved = regs->err & 0x8;
 	//int id = regs->err & 0x10;
 	
-	printk("%2VPAGE FAULT ( %s%s%s%s)\nAddress: %p", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
+	printk("%2Vpage_fault: process %d caused a page fault at address 0x%x\n", current->t_pid, address);
+	printk("%2Vpage_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).\n", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
+	/*
+	printk("%2VPAGE FAULT ( %s%s%s%s)\nAddress: 0x%x\n", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
 	printk("%2VError Code: 0x%X\n", regs->err);
 	printk("%2VEFLAGS: 0x%X\n", regs->eflags);
 	printk("%2VEIP: 0x%X\n", regs->eip);
@@ -270,9 +281,13 @@ void page_fault(struct regs* regs)
 	asm volatile ("movl %%cr3,%0;": "=r"(cr3));
 	printk("%2VCR0: 0x%X\n", cr0);
 	printk("%2VCR3: 0x%X\n", cr3);
-	printk("%2VCS: 0x%X\nDS: 0x%X\n", regs->cs, regs->ds);
+	printk("%2VCS: 0x%X\nDS: 0x%X\n", regs->cs, regs->ds);*/
 	
-	while(1);
+	printk("%2Vpage_fault: killing task %d.\n", current->t_pid);
+	sys_exit(-1);
+	
+	printk("%2Vsystem: unable to kill task. entering infinite loop instead...\n");
+	while(1) asm volatile("hlt");
 }
 
 /*
@@ -381,4 +396,50 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 	}
 	
 	return dst;
+}
+
+int strip_page_dir(page_dir_t* dir)
+{
+	int erase_table = 0;
+	for(unsigned int t = 0; t < 1024; ++t)
+	{
+		if( !dir->table[t] || dir->table[t] == kerndir->table[t] ) continue;
+		erase_table=1;
+		for(unsigned int p = 0; p < 1024; ++p)
+		{
+			// Don't erase kernel or initial user stacks
+			if( VADDR(t,p,0) >= TASK_KSTACK_ADDR && VADDR(t,p,0) < (TASK_KSTACK_ADDR+TASK_KSTACK_SIZE) ){
+				erase_table = 0;
+				continue;
+			}
+			if( VADDR(t,p,0) >= (TASK_STACK_START-TASK_STACK_INIT_BASE) && VADDR(t,p,0) < TASK_STACK_START ){
+				erase_table = 0;
+				continue;
+			}
+			free_frame(&dir->table[t]->page[p]);
+		}
+		if( erase_table ){
+			kfree(dir->table[t]);
+		}
+	}
+	return 0;
+}
+
+void free_page_dir(page_dir_t* dir)
+{
+	if( dir == curdir ){
+		return;
+	}
+	
+	for(int t = 0; t < 1024; ++t)
+	{
+		if( !dir->table[t] || dir->table[t] == kerndir->table[t] ) continue;
+		for(int p = 0; p < 1024; ++p)
+		{
+			free_frame(&dir->table[t]->page[p]);
+		}
+		kfree(dir->table[t]);
+	}
+	
+	kfree(dir);
 }

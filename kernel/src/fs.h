@@ -7,6 +7,7 @@
 //#include <dirent.h>
 #include "linkedlist.h"
 #include <dirent.h>
+#include "chrdev.h"
 
 // Filesystem flags
 #define FS_NODEV		0x00000001

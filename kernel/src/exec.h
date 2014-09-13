@@ -84,6 +84,15 @@ struct _exec_type
 	 * 	and module pointers filled in (reference counting and lists can be empty).
 	 */
 	module_t*(*load_module)(struct file*);
+	/* function: check_exec
+	 * parameters:
+	 *	exec_t* - the executable structure currently being loaded
+	 * return values:
+	 * 	Returns 1 if the executable is of the correct format and can be loaded
+	 *	Returns 0 if the executable is invalid for the current system.
+	 */
+	int(*check_exec)(exec_t*);
+		
 	
 	exec_type_t* next;
 };
@@ -101,7 +110,7 @@ int sys_insmod(const char* filename);
 // Remove module from the kernel
 int sys_rmmod(const char* module_name);
 // Execute a file
-int sys_execve(const char* filename, char* const argv[], char* const envp[]);
+int sys_execve(const char* filename, char** argv, char** envp);
 
 // Call this function to close the executable and free all memory associated
 // You should not use or dereference the pointer after calling this function.

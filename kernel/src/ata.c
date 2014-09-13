@@ -10,10 +10,12 @@
 int ide_block_open(struct block_device* device, dev_t devid);
 int ide_block_close(struct block_device* device, dev_t devid);
 int ide_block_read(struct block_device* device, dev_t devid, off_t lba, size_t count, char* buffer);
+int ide_block_write(struct block_device* device, dev_t devid, off_t lba, size_t count, const char* buffer);
 int ide_block_exist(struct block_device* device, dev_t devid);
 
 struct block_operations ide_block_operations = {
 	.read = ide_block_read,
+	.write = ide_block_write,
 	.open = ide_block_open,
 	.close = ide_block_close,
 	.exist = ide_block_exist,
@@ -21,6 +23,7 @@ struct block_operations ide_block_operations = {
 
 // Forward Declarations
 static inline void wait_one_milli( void );
+void ata_write_block(u8 channel, u8 reg, u8* buffer);
 
 static const char* ATA_DEVICE_TYPE_NAME[2] = { "ATA", "ATAPI" };
 
@@ -104,15 +107,31 @@ int ide_block_read(struct block_device* device, dev_t devid, off_t lba, size_t c
 		return -EFAULT;
 	}
 	
-	return ata_read_sectors(ide_device[d].channel, ide_device[d].drive, lba + ide_device[d].part[p].lba_start, (u8)count, buffer);
+	return ata_pio_transfer(ide_device[d].channel, ide_device[d].drive, ATA_PIO_READ, lba + ide_device[d].part[p].lba_start, (u8)count, buffer);
+}
+
+int ide_block_write(struct block_device* device, dev_t devid, off_t lba, size_t count, const char* buffer)
+{
+	UNUSED(device);
+	u8 min = (u8)minor(devid);
+	u8 d = (min & 0x0f);
+	u8 p = ((min & 0xf0) >> 4);
+	
+	if( (lba+count) >= ide_device[d].part[p].lba_end ){
+		return -EFAULT;
+	}
+	
+	return ata_pio_transfer(ide_device[d].channel, ide_device[d].drive, ATA_PIO_WRITE, lba + ide_device[d].part[p].lba_start, (u8)count, (void*)buffer);
 }
 
 static inline void wait_one_milli( void )
 {
+	u32 eflags = enablei();
 	tick_t start = timer_get_ticks();
 	while( (timer_get_ticks() - start) == 0 ){
 		asm volatile ("hlt");
 	}
+	restore(eflags);
 }
 
 int ata_check_partition(u8* partition)
@@ -226,7 +245,7 @@ int ide_initialize( void )
 			
 			if( ide_device[ndevs].type == ATA_TYPE_ATA )
 			{
-				int error = ata_read_sectors(ide_device[ndevs].channel, ide_device[ndevs].drive, 0, 1, ide_buffer);
+				int error = ata_pio_transfer(ide_device[ndevs].channel, ide_device[ndevs].drive, ATA_PIO_READ, 0, 1, ide_buffer);
 				if( error != 0 ){
 					printk("ide: unable to read Master Boot Record: %d\n", error);
 				} else {
@@ -393,6 +412,27 @@ void ata_read_block(u8 channel, u8 reg, u8* buffer)
 	}
 }
 
+void ata_write_block(u8 channel, u8 reg, u8* buffer)
+{
+	if( reg > 0x07 && reg < 0x0C){
+		ata_write_reg(channel, ATA_REG_CONTROL, 0x80 | ide_channel[channel].interrupt);
+	}
+	for(int i = 0; i < 128; ++i){
+		if( reg < 0x08 ){
+			outl((u16)(ide_channel[channel].base + reg - 0x00), ((u32*)(buffer))[i]);
+		} else if( reg < 0x0C ){
+			outl((u16)(ide_channel[channel].base + reg - 0x06), ((u32*)(buffer))[i]);
+		} else if( reg < 0x0E ){
+			outl((u16)(ide_channel[channel].ctrl + reg - 0x0A), ((u32*)(buffer))[i]);
+		} else if( reg < 0x16 ){
+			outl((u16)(ide_channel[channel].base + reg - 0x0E), ((u32*)(buffer))[i]);
+		}
+	}
+	if( reg > 0x07 && reg < 0x0C ){
+		ata_write_reg(channel, ATA_REG_CONTROL, ide_channel[channel].interrupt);
+	}
+}
+
 void ata_enable_irq(u8 channel)
 {
 	UNUSED(channel);
@@ -410,10 +450,14 @@ int ata_error_handler(u8 channel, int drive, u8 status)
 }
 
 // Read data from the hard disk using PIO mode
-int ata_read_sectors(u8 channel, u8 drive, u32 lba, u8 count, void* location)
+int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void* location)
 {
 	u8 status = 0;
-
+	
+	if( direction != ATA_PIO_READ && direction != ATA_PIO_WRITE ){
+		return -EINVAL;
+	}
+	
 	// Largest 28-bit number
 	if( lba > 268435455 ){
 		return -E2BIG;
@@ -431,7 +475,11 @@ int ata_read_sectors(u8 channel, u8 drive, u32 lba, u8 count, void* location)
 	ata_write_reg(channel, ATA_REG_LBA0, (u8)(lba & 0xFF));
 	ata_write_reg(channel, ATA_REG_LBA1, (u8)( (lba >> 8) & 0xFF ));
 	ata_write_reg(channel, ATA_REG_LBA2, (u8)( (lba >> 16) & 0xFF ));
-	ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_READ_SECTORS);
+	if( direction == ATA_PIO_READ ){
+		ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_READ_SECTORS);
+	} else {
+		ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_WRITE_SECTORS);
+	}
 	wait_one_milli();
 	
 	while( 1 )
@@ -444,7 +492,7 @@ int ata_read_sectors(u8 channel, u8 drive, u32 lba, u8 count, void* location)
 			if( !(status & ATA_SR_BSY) && !(status & ATA_SR_DRQ) ){
 				return ata_error_handler(channel, (int)drive, status);
 			}
-
+			
 			// Transition HPIOI1:HPIOI1
 			if( (status & ATA_SR_BSY) ) continue;
 			// Transition HPIOI1:HPIOI2
@@ -454,86 +502,22 @@ int ata_read_sectors(u8 channel, u8 drive, u32 lba, u8 count, void* location)
 		}
 		
 		// HPIOI2: Transfer_Data State (ATA v6 Spec. pg. 334)
-		ata_read_block(channel, ATA_REG_DATA, location);
+		if( direction == ATA_PIO_READ ){
+			ata_read_block(channel, ATA_REG_DATA, location);
+		} else {
+			ata_write_block(channel, ATA_REG_DATA, location);
+		}
 		count = (u8)(count - 1);
 		location = (void*)( (char*)location + 512 );
 		
 		if( count == 0 ){
 			break;
-
 		}
 		
 		// Transition HPIOI2:HPIOI1
 	}
 	
 	
-
-	return 0;
-}
-
-int ide_read(int dr, int prt, u32 pos, u32 cnt, void* buf)
-{
-	int error = 0;
-	
-	if( !ide_device[dr].exist ){
-		return -ENXIO;
-	}
-	
-	if( !ide_device[dr].part[prt].valid ){
-		return -ENXIO;
-	}
-	
-	u32 lba = ATA_BYTE_TO_SECTOR(pos);
-	u32 end_lba = lba + ATA_BYTE_TO_SECTOR(cnt);
-	if( (cnt % ATA_SECTOR_SIZE) != 0 ){
-		end_lba++;
-	}
-	
-	if( end_lba >= ide_device[dr].part[prt].lba_end ){
-		return -ENXIO;
-	}
-	
-	if( (pos % ATA_SECTOR_SIZE) != 0 )
-	{
-		error = ata_read_sectors(ide_device[dr].channel, ide_device[dr].drive, lba, 1, ide_buffer);
-		if( error != 0 ){
-			return error;
-		}
-		if( cnt > (ATA_SECTOR_SIZE - (pos%ATA_SECTOR_SIZE)) ){
-			memcpy(buf, &ide_buffer[pos%ATA_SECTOR_SIZE], ATA_SECTOR_SIZE - (pos%ATA_SECTOR_SIZE));
-			buf = (void*)( (char*)(buf) + (ATA_SECTOR_SIZE - (pos%ATA_SECTOR_SIZE)) );
-			cnt -= (ATA_SECTOR_SIZE - (pos%ATA_SECTOR_SIZE));
-		} else {
-			memcpy(buf, &ide_buffer[pos%ATA_SECTOR_SIZE], cnt);
-			return 0;
-		}
-		pos = (lba+1)*ATA_SECTOR_SIZE;
-		lba += 1;
-	}
-	
-	if( cnt < ATA_SECTOR_SIZE )
-	{
-		error = ata_read_sectors(ide_device[dr].channel, ide_device[dr].drive, lba, 1, ide_buffer);
-		if( error != 0 ){
-			return error;
-		}
-		memcpy(buf, ide_buffer, cnt);
-		return 0;
-	}
-	
-	error = ata_read_sectors(ide_device[dr].channel, ide_device[dr].drive, lba, (u8)ATA_BYTE_TO_SECTOR(cnt), buf);
-	if( error != 0 ){
-		return error;
-	}
-	lba += ATA_BYTE_TO_SECTOR(cnt);
-	buf = (void*)( (char*)(buf) + ATA_BYTE_TO_SECTOR(cnt)*ATA_SECTOR_SIZE);
-	cnt -= ATA_BYTE_TO_SECTOR(cnt)*ATA_SECTOR_SIZE;
-	
-	if( cnt != 0 )
-	{
-		ata_read_sectors(ide_device[dr].channel, ide_device[dr].drive, lba, 1, ide_buffer);
-		memcpy(buf, ide_buffer, cnt);
-	}
 	
 	return 0;
 }

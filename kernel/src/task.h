@@ -21,13 +21,21 @@
 #define TF_EXIT ((u32)0x00000010)
 // The has been killed, and is waiting to be waited for
 #define TF_ZOMBIE ((u32)0x00000020)
+// The task has just performed an execve and needs the scheduler to "finish up"
+#define TF_EXECVE ((u32)0x00000040)
 
 #define T_ISZOMBIE(task) ((task)->t_flags & TF_ZOMBIE)
 #define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
+#define T_EXECVE(task)	((task)->t_flags & TF_EXECVE)
 
 #define TASK_KSTACK_ADDR	0xFFFFD000
 #define TASK_KSTACK_SIZE	0x2000
 #define TASK_MAGIC_EIP		0xDEADCABB
+
+#define TASK_STACK_START	KERNEL_VIRTUAL_BASE
+#define TASK_STACK_INIT_SIZE	0x4000
+#define TASK_STACK_INIT_BASE	(KERNEL_VIRTUAL_BASE-TASK_STACK_INIT_SIZE)
+#define TASK_MAX_ARG_SIZE	(TASK_STACK_INIT_SIZE/2)
 
 #define TASK_MAX_OPEN_FILES 1024
 
@@ -60,6 +68,7 @@ struct task
 	
 	struct page_dir*	t_dir;					// page directory for this task
 	struct vfs		t_vfs;					// this tasks virtual file system information
+	struct regs		t_regs;					// Register Information for the task switch after an execve
 	
 	list_t			t_sibling;				// the link in the parents children list
 	list_t			t_children;				// list of child tasks (forked processes)
@@ -78,5 +87,7 @@ pid_t sys_getpid( void );
 int sys_fork( void );
 void sys_exit( int result );
 pid_t sys_waitpid(pid_t pid, int* status, int options);
+
+extern struct task* current;
 
 #endif

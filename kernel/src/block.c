@@ -227,6 +227,7 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 	spin_lock(&device->lock);
 	
 	if( count == 0 ){
+		spin_unlock(&device->lock);
 		return 0;
 	}
 	
@@ -242,6 +243,7 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 		// read in the entire block
 		error = device->ops->read(device, devid, lba, 1, device->block);
 		if( error != 0 ){
+			spin_unlock(&device->lock);
 			return (ssize_t)error;
 		}
 		// Copy the data into the block
@@ -259,6 +261,7 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 		// write the whole back to disk
 		error = device->ops->write(device, devid, lba, 1, device->block);
 		if( error != 0 ){
+			spin_unlock(&device->lock);
 			return (ssize_t)error;
 		}
 		lba++;
@@ -270,6 +273,7 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 	{
 		error = device->ops->write(device, devid, lba, count / device->blksz, buffer);
 		if( error != 0 ){
+			spin_unlock(&device->lock);
 			return (ssize_t)error;
 		}
 		lba += count / device->blksz;
@@ -281,14 +285,18 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 	{
 		error = device->ops->read(device, devid, lba, 1, device->block);
 		if( error != 0 ){
+			spin_unlock(&device->lock);
 			return (ssize_t)error;
 		}
 		memcpy(device->block, buffer, count);
 		error = device->ops->write(device, devid, lba, 1, device->block);
 		if( error != 0 ){
+			spin_unlock(&device->lock);
 			return (ssize_t)error;
 		}
 	}
+	
+	spin_unlock(&device->lock);
 	
 	return (ssize_t)requested_count;
 }

@@ -45,7 +45,7 @@
 #define ATA_CMD_READ_PIO_EXT	0x24
 #define ATA_CMD_READ_DMA	0xC8
 #define ATA_CMD_READ_DMA_EXT	0x25
-#define ATA_CMD_WRITE_PIO	0x30
+#define ATA_CMD_WRITE_SECTORS	0x30
 #define ATA_CMD_WRITE_PIO_EXT	0x34
 #define ATA_CMD_WRITE_DMA	0xCA
 #define ATA_CMD_WRITE_DMA_EXT	0x35
@@ -112,6 +112,9 @@
 #define IDE_POLLING_FAULT	2
 #define IDE_POLLING_DRQ		3
 
+// PIO Directions
+#define ATA_PIO_READ		0
+#define ATA_PIO_WRITE		1
 
 // Defines IDE ATA Channel Structure
 typedef struct _ide_channel
@@ -168,6 +171,8 @@ int ata_check_partition(u8* partition);
 
 int ata_read_sectors(u8 channel, u8 drive, u32 lba, u8 count, void* location);
 int ata_write_sectors(u8 channel, u8 drive, u32 lba, u32 count, void* data);
+
+int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void* location);
 
 int ide_read(int drive, int partition, u32 pos, u32 count, void* buffer);
 

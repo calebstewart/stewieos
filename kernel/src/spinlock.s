@@ -2,6 +2,8 @@
 spin_lock:
 	mov edx,1 ; the value we want in the lock
 	mov ecx,[esp+4]
+	pushf
+	sti
 .loop0:
 	; if( [ecx] == eax ){
 	;	[ecx] = edx
@@ -15,6 +17,7 @@ spin_lock:
 	lock cmpxchg dword[ecx],edx
 	jnz .loop0 ; If the zero flag is not set, then we didn't aquire the lock
 .return:
+	popf
 	ret
 
 [global spin_unlock:function]

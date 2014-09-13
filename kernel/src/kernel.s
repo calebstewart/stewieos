@@ -16,6 +16,13 @@ disablei:
 	pop eax
 	cli
 	ret
+	
+[global enablei]
+enablei:
+	pushf
+	pop eax
+	sti
+	ret
 
 ;
 ; Function: restore

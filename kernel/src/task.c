@@ -145,6 +145,14 @@ void task_preempt(struct regs* regs)
 	
 	// we do some magic to return this if we just switched
 	if( eip == TASK_MAGIC_EIP ){
+		if( T_EXECVE(current) )
+		{
+			// Copy the new register information from the register structure
+			// This should be setup by execve to load user segments, and 
+			// entry point for the new application
+			memcpy(regs, &current->t_regs, sizeof(*regs));
+			current->t_flags &= ~TF_EXECVE;
+		}
 		return;
 	}
 	
@@ -166,16 +174,15 @@ void task_preempt(struct regs* regs)
 		{
 			current = list_next(&ready_tasks, struct task, t_queue, &ready_tasks);
 			continue;
-		}
-		if(current->t_flags & TF_EXIT)
+		} else if(current->t_flags & TF_EXIT)
 		{
 			struct task* dead = current;
 			current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
 			task_kill(dead);
 			continue;
 		}
+		
 	}
-			
 	
 	eip = current->t_eip;
 	esp = current->t_esp;

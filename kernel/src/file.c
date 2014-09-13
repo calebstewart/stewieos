@@ -72,6 +72,8 @@ struct file* file_open(struct path* path, int flags)
 	if( S_ISBLK(path->p_dentry->d_inode->i_mode) )
 	{
 		file->f_ops = &block_device_fops;
+	} else if( S_ISCHR(path->p_dentry->d_inode->i_mode) ){
+		file->f_ops = get_chrdev_fops(major(path->p_dentry->d_inode->i_dev));
 	} else {
 		file->f_ops = path->p_dentry->d_inode->i_default_fops;
 	}
@@ -84,6 +86,8 @@ struct file* file_open(struct path* path, int flags)
 			return ERR_PTR(result);
 		}
 	}
+	
+	file->f_status = flags;
 	
 	return file;
 }
