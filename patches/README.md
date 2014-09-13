@@ -30,7 +30,8 @@ patch -s -p0 < patch_file.patch
 
 After that, the source directories are ready for compilation.
 
-==Compiling==
+Compiling
+---------
 
 For ease of use later, first define a couple environment variables:
 
