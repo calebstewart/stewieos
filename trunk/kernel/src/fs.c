@@ -14,7 +14,6 @@
 static list_t			 vfs_filesystem_list = LIST_INIT(vfs_filesystem_list);		// A list of filesystem structures (filesystem types)
 static list_t			 vfs_mount_list = LIST_INIT(vfs_mount_list);			// A list of mounts to check a device against currently
 static struct dentry		*vfs_root = NULL;						// root directory entry for the entire filesystem
-extern struct task		*current;
 
 // internal function prototypes
 void i_free(struct inode* inode); // free an inode with no more references

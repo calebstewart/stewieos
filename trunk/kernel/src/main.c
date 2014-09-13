@@ -73,6 +73,11 @@ int kmain( multiboot_info_t* mb )
 	
 	pid_t pid = sys_fork();
 	
+	/* NOTE We should load something /bin/INIT here, not call another kernel function.
+	 * In the mean-time, we will simulate it by just calling a function, then exiting.
+	 * 
+	 * This should be changed as soon as I have enough user-land functionality.
+	 */
 	if( pid == 0 ){
 		multitasking_entry(mb);
 		// this should never happen
@@ -127,27 +132,12 @@ void multitasking_entry( multiboot_info_t* mb )
 		}
 	}
 	
-// 	printk("INIT: opening /hda1 for reading...\n");
-// 	int fd = sys_open("/hda1", O_RDONLY, 0);
-// 	
-// 	if( fd < 0 ){
-// 		printk("INIT: error: unable to open /hda1! error code %d.\n", fd);
-// 		return;
-// 	}
-// 	
-// 	printk("INIT: reading superblock from /hda1...\n");
-// 	char superblock[1024];
-// 	sys_lseek(fd, 1024, SEEK_SET);
-// 	sys_read(fd, superblock, 1024);
-// 	
-// 	printk("INIT: EXT2 Magic Bytes: 0x%04X\n", *((u16*)(&superblock[56])));
-// 	
-// 	sys_close(fd);
-
+	// Setup the ext2 filesystem driver
 	e2_setup();
 	
+	// Mount the Ext2 Filesystem from the root hard disk partition
 	printk("INIT: mounting /hda1 to /...\n");
-	error = sys_mount("/hda1", "/", "ext2", MS_RDONLY, NULL);
+	error = sys_mount("/hda1", "/", "ext2", 0/*MS_RDONLY*/, NULL);
 	if( error != 0 ){
 		printk("%2VINIT: error: unable to mount device. error code %d\n", error);
 		return;
@@ -155,6 +145,7 @@ void multitasking_entry( multiboot_info_t* mb )
 	
 	printk("INIT: successfully mounted /hda1 to /!\n");
 	
+	// Print a directory listing
 	printk("INIT: attempting to open /...\n");
 	int fd = sys_open("/", O_RDONLY, 0);
 	if( fd < 0 ){
@@ -194,12 +185,36 @@ void multitasking_entry( multiboot_info_t* mb )
 	printk("\nINIT: closing /test_file...\n");
 	sys_close(fd);
 	
-	error = sys_insmod("/bin/test_mod.o");
+	error = sys_insmod("/bin/screen.o");
 	if( error != 0 ){
 		printk("INIT: unable to load module. error code %d\n", error);
 	}
 	
-	printk("INIT: Finished.\n");
+	printk("INIT: Creating a node...\n");
+	int result = sys_mknod("/dev/node", S_IFCHR, makedev(0, 0));
+	
+	if( result == 0 ){
+		printk("INIT: Node /dev/node created!\n");
+	} else {
+		printk("INIT: unable to create node. error code %d\n", result);
+	}
+	
+	printk("INIT: Forking INIT and Executing /bin/test...\n");
+	pid_t pid = sys_fork();
+	if( pid < 0 )
+	{
+		printk("INIT: unable to fork process. error code %d\n", pid);
+		return;
+	} else if( pid != 0 ) {
+		printk("INIT: Entering infinite loop...\n", current->t_pid);
+		return;
+	} else if( pid == 0 ) {
+		char* argv[2] = {(char*)"/bin/test", NULL}, *envp[2] = {(char*)"PATH=/bin", NULL};
+		error = sys_execve("/bin/test", argv, envp);
+		printk("INIT: unable to execute /bin/test. error code %d\n", error);
+		printk("INIT: killing forked init task...\n");
+		sys_exit(-1);
+	}
 	
 	return;
 	

@@ -149,6 +149,7 @@ unsigned long inl(unsigned short port);
 void cpuid(int code, u32* a, u32* d);
 u32 cpuid_string(int code, char* str);
 
+u32 enablei( void );
 u32 disablei( void );
 void restore(u32 eflags);
 

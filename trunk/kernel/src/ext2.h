@@ -150,7 +150,14 @@ typedef struct _e2_bg_descr
 
 void e2_setup(void );
 
+ino_t e2_alloc_inode(struct superblock* sb, e2_inode_t* inode);
+int e2_create_dirent(struct inode* dir, const char* name, ino_t ino);
+
 int e2_get_bg_descr(struct superblock* sb, size_t bgidx, e2_bg_descr_t* descr);
+int e2_write_bg_descr(struct superblock* sb, size_t bgidx, const e2_bg_descr_t* descr);
+
+ssize_t e2_read_block(struct superblock* sb, off_t block, size_t count, void* buffer);
+ssize_t e2_write_block(struct superblock* sb, off_t block, size_t count, const void* buffer);
 
 ssize_t e2_read_inode_data(struct superblock* sb, struct inode* inode, off_t offset, size_t size, char* buffer);
 

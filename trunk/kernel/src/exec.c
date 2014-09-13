@@ -8,6 +8,7 @@
 #include "unistd.h"
 #include "elf/elf32.h"
 #include "paging.h"
+#include "task.h"
 
 exec_type_t* g_exec_type = NULL;
 list_t g_module_list = LIST_INIT(g_module_list);
@@ -60,13 +61,13 @@ int rem_module(module_t* module)
 	return 0;
 }
 
-int load_exec(const char* filename, char** argv, char** envp)
+int sys_execve(const char* filename, char** argv, char** envp)
 {
 	struct path path;
 	exec_t* exec = NULL;
 	int error = 0;
-	page_dir_t* dir = NULL;
-	page_dir_t* old_dir __attribute__((unused)) = curdir;
+	//page_dir_t* dir = NULL;
+	//page_dir_t* old_dir = curdir;
 	
 	// Lookup the path from the filename
 	error = path_lookup(filename, WP_DEFAULT, &path);
@@ -98,6 +99,20 @@ int load_exec(const char* filename, char** argv, char** envp)
 	file_seek(filp, 0, SEEK_SET);
 	file_read(filp, exec->buffer, 256);
 	
+	// Check all types. Use the first acceptable type
+	exec_type_t* type = g_exec_type;
+	while( type != NULL )
+	{
+		// a type can implement load_exec, load_module, or both.
+		if( type->load_exec )
+		{
+			if( type->check_exec(exec) != 0 ){
+				break;
+			}
+		}
+		type = type->next;
+	}
+	
 	// Count the arguments
 	u32 argc = 0;
 	u32 argsz = 0;
@@ -113,39 +128,103 @@ int load_exec(const char* filename, char** argv, char** envp)
 	
 	// Enough room for the arrays and the strings themselves
 	size_t total_argsz = argsz + envsz + sizeof(char*)*(envc+1) + sizeof(char*)*(argc+1);
+	// Check if we are requesting too much space
+	if( total_argsz > TASK_MAX_ARG_SIZE ){
+		return file_close(filp);
+		kfree(exec);
+		return -E2BIG;
+	}
+	
+	// Allocate some kernel memory for the argument/environment
 	void* argtemp = kmalloc(total_argsz);
 	if( argtemp == NULL ){
 		file_close(filp);
 		kfree(exec);
 		return -ENOMEM;
 	}
+
+	// Copy the argument/environment arrays/strings into the kernel memory
+	char* str = (char*)argtemp + sizeof(char*)*(envc+1) + sizeof(char*)*(argc+1);
+	char** nargv = (char**)argtemp;
+	char** nenvp = (char**)( (char*)argtemp + sizeof(char*)*(argc+1) );
+	for(u32 i = 0; i < argc; ++i){
+		nargv[i] = str;
+		strcpy(str, argv[i]);
+		str += strlen(str)+1;
+	}
+	nargv[argc] = NULL;
+	for(u32 i = 0; i < envc; ++i){
+		nenvp[i] = str;
+		strcpy(str, envp[i]);
+		str += strlen(str)+1;
+	}
+	nenvp[envc] = NULL;
 	
-	// Create an empty page directory
-	dir = copy_page_dir(kerndir);
-	switch_page_dir(dir);
+	// Create an empty page directory and free the old one (there's no going back from here...)
+	strip_page_dir(curdir);
+	//dir = copy_page_dir(kerndir);
+	//switch_page_dir(dir);
+	//free_page_dir(old_dir);
 	
-	
-	
-	// Check all types. Load the executable using the first acceptable type.
-	exec_type_t* type = g_exec_type;
-	while( type != NULL )
+	// Allocate the new tasks user stack space
+	for(u32 addr = TASK_STACK_INIT_BASE; addr < TASK_STACK_START; addr += 0x1000)
 	{
-		// a type can implement load_exec, load_module, or both.
-		if( type->load_exec )
-		{
-			// Try and load the executable
-			// If the executable doesn't match the type, 0 is returned
-			// otherwise an error is returned.
-			error = type->load_exec(exec);
-			if( error != 0 ){
-				close_exec(exec);
-				return error;
-			}
-		}
-		type = type->next;
+		alloc_page(curdir, (void*)addr, 1, 1);
 	}
 	
-	return ENOEXEC;
+	// Calculate argument and environment pointers within the users stack
+	argv = (char**)(TASK_STACK_START-total_argsz);
+	envp = (char**)( (char*)argv + sizeof(char*)*(argc+1) );
+	str = (char*)( (char*)envp + sizeof(char*)*(envc+1) );
+	
+	// Copy the argument/environment arrays/strings into the users stack
+	for(u32 i = 0; i < argc; ++i){
+		argv[i] = str;
+		strcpy(str, nargv[i]);
+		str += strlen(str)+1;
+	}
+	argv[argc] = NULL;
+	for(u32 i = 0; i < envc; ++i){
+		envp[i] = str;
+		strcpy(str, nenvp[i]);
+		str += strlen(str)+1;
+	}
+	envp[envc] = NULL;
+	
+	// Load the executable
+	error = type->load_exec(exec);
+	// Hmmm... whoops...
+	if( error != 0 ){
+		sys_exit(error);
+		while(1);
+	}
+	
+	// These are the actual arguments to main (argv and envp)
+	*(char***)( (u32)argv - 8 ) = argv;
+	*(char***)( (u32)argv - 4 ) = envp;
+	*(int*)( (u32)argv - 12 ) = argc; 
+	
+	// Fill the Registers structure so we start at the correct place
+	// and in user mode
+	memset(&current->t_regs, 0, sizeof(current->t_regs));
+	current->t_regs.eip = (u32)exec->entry;
+	current->t_regs.useresp = (u32)argv;
+	current->t_regs.eflags = 0x200200;
+	current->t_regs.cs = 0x1B;
+	current->t_regs.ss = 0x23;
+	current->t_regs.ds = 0x23;
+	// Tell the scheduler that we switched 
+	// and also give up our time slice so we
+	// finish switching as soon as possible.
+	current->t_flags |= TF_EXECVE;
+	current->t_ticks_left = 0;
+	
+	// Interrupts may have been disabled, just enabled them just in case
+	// It shouldn't matter at this point anyway.
+	asm volatile("sti");
+	// Loop until a timer interrupt fires (in which case the scheduler takes
+	// over).
+	while(1) asm volatile ("hlt;");
 }
 
 void close_exec(exec_t* exec)

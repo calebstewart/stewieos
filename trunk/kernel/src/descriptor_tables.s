@@ -29,6 +29,8 @@ flush_gdt:
 	jmp 0x08:.flush
 ; return
 .flush:
+	mov ax,0x28
+	ltr ax
 	ret
 
 ;
@@ -97,6 +99,13 @@ ISR_NOERR	29
 ISR_NOERR	30
 ISR_NOERR	31
 ISR_NOERR	32
+
+[global syscall_intr]
+syscall_intr:
+	cli
+	push byte 0
+	push dword 0x00000080
+	jmp irq_stub
 
 ; This makes it easier to define the irq functions
 ; it simply pushes the interrupt number and calls the

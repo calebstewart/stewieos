@@ -24,6 +24,7 @@ int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab, Elf32_R
 int elf_resolve(struct file* file, Elf32_Ehdr* ehdr, Elf32_Sym* symbol, char* strtab);
 void elf_allocate_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
 void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
+int elf_check_exec(exec_t* exec);
 
 // Defines the elf executable loader interface
 exec_type_t elf_exec_type = {
@@ -31,6 +32,7 @@ exec_type_t elf_exec_type = {
 	.descr = "Intel 32-bit Executable and Linkable Format",
 	.load_exec = elf_load_exec,
 	.load_module = elf_load_module,
+	.check_exec = elf_check_exec,
 };
 
 #define ELF_SHDR(elf, shndx) ((Elf32_Shdr*)( (Elf32_Addr)(elf) + (elf)->e_shoff + (shndx)*sizeof(Elf32_Shdr) ))
@@ -77,6 +79,17 @@ void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw)
 		page->user = (unsigned char)(user & 1);
 		start += 0x1000;
 	}
+}
+
+int elf_check_exec(exec_t* exec)
+{
+	Elf32_Ehdr* ehdr = (Elf32_Ehdr*)exec->buffer;
+	
+	if( elf_check_ident(ehdr, ET_EXEC) != 0 ){
+		return 0;
+	}
+	
+	return 1;
 }
 
 int elf_load_exec(exec_t* exec)

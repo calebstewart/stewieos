@@ -1,5 +1,7 @@
 //#include "kernel.h"
 #include "descriptor_tables.h"
+#include "task.h"
+#include "syscall.h"
 
 // Function Prototypes
 extern void flush_gdt(void* addr); // assembly function to present the new gdt to the system
@@ -9,12 +11,19 @@ static void idt_set_gate(uint n, void(*base)(void), u16 selector, u8 flags); // 
 static int initialize_gdt(void);
 static int initialize_idt(void);
 
+#define GDT_SIZE 6
+
 // Global Variables
-struct gdt_entry	gdt_table[5];			// Global Descriptor Table
+struct gdt_entry	gdt_table[GDT_SIZE];			// Global Descriptor Table
 struct gdt_ptr		gdt_ptr;			// Global Descriptor Table 
 struct idt_entry	idt_table[256];			// Interrupt Descriptor Table
 struct idt_ptr		idt_ptr;			// Interrupt Descriptor Table Pointer
 isr_callback_t		isr_callback[256];		// Interrupt handlers for IRQs and ISRs
+tss_entry_t		tss_entry = {			// Task State Segment Entry
+				.esp0 = TASK_KSTACK_ADDR+TASK_KSTACK_SIZE,
+				.ss0 = 0x10,
+				.iomap_base = sizeof(tss_entry_t),
+};
 
 
 /* function: initialize_descriptor_tables
@@ -41,7 +50,7 @@ int initialize_descriptor_tables()
 
 static int initialize_gdt( void )
 {
-	gdt_ptr.limit = sizeof(struct gdt_entry)*5 - 1;
+	gdt_ptr.limit = sizeof(struct gdt_entry)*GDT_SIZE - 1;
 	gdt_ptr.base = (u32)&gdt_table;
 	
 	gdt_set_gate(0x00, 0, 0, 0, 0);			// Null Segment
@@ -49,6 +58,7 @@ static int initialize_gdt( void )
 	gdt_set_gate(0x02, 0, 0xFFFFFFFF, 0x92, 0xCF);	// Kernel Data Segment
 	gdt_set_gate(0x03, 0, 0xFFFFFFFF, 0xFA, 0xCF);	// User Code Segment
 	gdt_set_gate(0x04, 0, 0xFFFFFFFF, 0xF2, 0xCF);	// User Data Segment
+	gdt_set_gate(0x05, (u32)&tss_entry, sizeof(tss_entry), 0x89, 0x40);
 	
 	flush_gdt(&gdt_ptr);
 	
@@ -57,7 +67,7 @@ static int initialize_gdt( void )
 
 static void gdt_set_gate(int n, u32 base, u32 limit, u8 access, u8 gran)
 {
-	if( n >= 5 || n < 0 ) return;
+	if( n >= GDT_SIZE || n < 0 ) return;
 
 	gdt_table[n].base_low = (base & 0xFFFF);
 	gdt_table[n].base_middle = (u8)((base & 0xFF0000) >> 16);
@@ -120,6 +130,8 @@ static int initialize_idt( void )
 	idt_set_gate(30, isr30, 0x08, 0x8E);
 	idt_set_gate(31, isr31, 0x08, 0x8E);
 	
+	idt_set_gate(0x80, syscall_intr, 0x08, 0xEE);
+	
 	// Remap all the IRQs to known interrupt
 	// vectors (32-47)
 	outb(0x20, 0x11);
@@ -153,6 +165,8 @@ static int initialize_idt( void )
 	register_interrupt(0x01, debug_interrupt);
 	
 	flush_idt((void*)&idt_ptr);
+	
+	register_interrupt(0x80, syscall_handler);
 	
 	return 0;
 }

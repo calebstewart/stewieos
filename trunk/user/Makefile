@@ -1,0 +1,22 @@
+# This is where you can add project directories to the build-chain
+PROJECTS:=test
+ALLPROJECTS:=$(PROJECTS:%=all-%)
+CLEANPROJECTS:=$(PROJECTS:%=clean-%)
+INSTALLPROJECTS:=$(PROJECTS:%=install-%)
+
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean install
+
+all: $(ALLPROJECTS)
+
+clean: $(CLEANPROJECTS)
+
+install: $(INSTALLPROJECTS)
+
+$(ALLPROJECTS):
+	$(MAKE) -C $(@:all-%=%) all
+
+$(CLEANPROJECTS):
+	$(MAKE) -C $(@:clean-%=%) clean
+	
+$(INSTALLPROJECTS):
+	$(MAKE) -C $(@:install-%=%) install
