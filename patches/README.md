@@ -1,5 +1,5 @@
-Instructions for Compiling StewieOS
-===================================
+Instructions for Compiling The StewieOS Toolchain
+=================================================
 
 Introduction
 ------------
