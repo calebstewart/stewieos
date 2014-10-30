@@ -20,8 +20,8 @@ char* g_shstrtab = NULL;
 char* g_strtab = NULL;
 Elf32_Sym* g_symtab = NULL;
 
-int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab, Elf32_Rel* rel, Elf32_Addr B, Elf32_Addr target, Elf32_Sym* stab, char* symstr, Elf32_Sword* pA);
-int elf_resolve(struct file* file, Elf32_Ehdr* ehdr, Elf32_Sym* symbol, char* strtab);
+int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab, Elf32_Rel* rel, Elf32_Addr B, Elf32_Addr target, Elf32_Sym* stab, char* symstr, size_t symstrlen, Elf32_Sword* pA);
+int elf_resolve(struct file* file, Elf32_Ehdr* ehdr, Elf32_Sym* symbol, char* strtab, size_t symstrlen);
 void elf_allocate_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
 void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
 int elf_check_exec(exec_t* exec);
@@ -230,6 +230,7 @@ module_t* elf_load_module(struct file* file)
 	// Now that all the sections are loaded, we can do relocations
 	for(size_t i = 0; i < ehdr.e_shnum; ++i)
 	{
+		//if( !(shtab[i].sh_flags & SHF_ALLOC) ) continue;
 		if( shtab[i].sh_type == SHT_REL || shtab[i].sh_type == SHT_RELA )
 		{
 			// Allocate space for the relocation table
@@ -273,14 +274,16 @@ module_t* elf_load_module(struct file* file)
 			file_seek(file, shtab[symhdr->sh_link].sh_offset, SEEK_SET);
 			file_read(file, symstr, shtab[symhdr->sh_link].sh_size);
 			
+			
+			
 			// Apply The Relocations
 			if( shtab[i].sh_type == SHT_REL ){
 				for(size_t r = 0; r < (shtab[i].sh_size/sizeof(Elf32_Rel)); ++r){
-					elf_relocate(file, &ehdr, shtab, &rtab[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr, NULL);
+					elf_relocate(file, &ehdr, shtab, &rtab[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr, shtab[symhdr->sh_link].sh_size, NULL);
 				}
 			} else {
 				for(size_t r = 0; r < (shtab[i].sh_size/sizeof(Elf32_Rela)); ++r){
-					elf_relocate(file, &ehdr, shtab, (Elf32_Rel*)&((Elf32_Rela*)rtab)[r], shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), (Elf32_Addr)module_base, stab, symstr, &((Elf32_Rela*)rtab)[r].r_addend);
+					elf_relocate(file, &ehdr, shtab, (Elf32_Rel*)&((Elf32_Rela*)rtab)[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr,shtab[symhdr->sh_link].sh_size, &((Elf32_Rela*)rtab)[r].r_addend);
 				}
 			}
 			
@@ -300,13 +303,16 @@ module_t* elf_load_module(struct file* file)
 	return module_info;
 }
 
-int elf_resolve(struct file* file, Elf32_Ehdr* ehdr __attribute__((unused)), Elf32_Sym* symbol, char* strtab)
+int elf_resolve(struct file* file, Elf32_Ehdr* ehdr __attribute__((unused)), Elf32_Sym* symbol, char* strtab, size_t strtablen)
 {
 	// Undefined symbol
 	if( symbol->st_shndx == SHN_UNDEF )
 	{
 		for(size_t i = 0; i < (g_symhdr->sh_size/sizeof(Elf32_Sym)); ++i)
 		{
+			if( symbol->st_name >= strtablen ){
+				continue;
+			}
 			if( strcmp(&g_strtab[g_symtab[i].st_name], &strtab[symbol->st_name]) == 0 ){
 				symbol->st_value = g_symtab[i].st_value;
 				symbol->st_shndx = SHN_ABS;
@@ -330,7 +336,7 @@ int elf_resolve(struct file* file, Elf32_Ehdr* ehdr __attribute__((unused)), Elf
 	return 0;
 }
 
-int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab __attribute__((unused)), Elf32_Rel* rel, Elf32_Addr B, Elf32_Addr target, Elf32_Sym* stab, char* symstr, Elf32_Sword* pA)
+int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab __attribute__((unused)), Elf32_Rel* rel, Elf32_Addr B, Elf32_Addr target, Elf32_Sym* stab, char* symstr, size_t symstrlen, Elf32_Sword* pA)
 {
 	int error = 0;
 	Elf32_Sword* P = NULL;
@@ -349,7 +355,7 @@ int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab __attrib
 	}
 	
 	// Get the value of the symbol
-	if( (error = elf_resolve(file, ehdr, &stab[ELF32_R_SYM(rel->r_info)], symstr)) != 0 ){
+	if( (error = elf_resolve(file, ehdr, &stab[ELF32_R_SYM(rel->r_info)], symstr, symstrlen)) != 0 ){
 		return error;
 	}
 	S = stab[ELF32_R_SYM(rel->r_info)].st_value;

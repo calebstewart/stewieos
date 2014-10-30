@@ -495,32 +495,109 @@ ino_t e2_alloc_inode(struct superblock* sb, e2_inode_t* inode)
 	return EXT2_BAD_INO;
 }
 
-u32 e2_get_direct_block(struct superblock* sb, e2_inode_t* inode, u32 block)
+u32 e2_alloc_block(struct superblock* sb)
 {
-	// Direct Blocks
-	if( block < 12 ){
-		return inode->i_block[block];
+	e2_superblock_t* e2 = (e2_superblock_t*)sb->s_private;
+	size_t grpcnt = e2->s_blocks_count / e2->s_blocks_per_group;
+	e2_bg_descr_t bg;
+	u32 block = (u32)-1;
+	//int result;
+	
+	if( e2->s_free_blocks_count == 0 ){
+		return 0;
 	}
 	
-	// Indirect blocks
-	if( block < (sb->s_blocksize/4 + 12) ){
-		u32 indirect = inode->i_block[12];
-		u32* blocks = (u32*)kmalloc(sb->s_blocksize);
-		block_read(sb->s_dev, indirect*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
-		block = blocks[block - 12];
-		kfree(blocks);
+	for(size_t i = 0; i < grpcnt; i++){
+		
+		// Grab the block group descriptor
+		e2_get_bg_descr(sb, i, &bg);
+		if( bg.bg_free_inodes_count == 0 ) continue;
+		
+		// Allocate space for the group bitmap
+		u32* bitmap = (u32*)kmalloc(sb->s_blocksize);
+		if( !bitmap ){
+			return EXT2_BAD_INO;
+		}
+		// Read in the block bitmap
+		block_read(sb->s_dev, bg.bg_block_bitmap*sb->s_blocksize, sb->s_blocksize, (void*)bitmap);
+		
+		// Look for the open block
+		for(size_t d = 0; d < (e2->s_inodes_per_group/8) && block == (u32)-1; ++d){
+			if( bitmap[d] == 0xFFFFFFFF ) continue;
+			for(int b = 0; b < 32 && block == (u32)-1; ++b){
+				if( !(bitmap[d] & (1 << b)) ){
+					block = (u32)(d*32 + b);
+					bitmap[d] |= (1<<b);
+				}
+			}
+		}
+		if( block == (u32)-1 ){
+			kfree(bitmap);
+			continue;
+		}
+		block = (u32)(block + i*e2->s_blocks_per_group);
+		
+		// Re-write the new bitmap to the device
+		block_write(sb->s_dev, bg.bg_block_bitmap*sb->s_blocksize, sb->s_blocksize, (const void*)bitmap);
+		// Decrement the block group free block count and rewrite the block group
+		bg.bg_free_blocks_count--;
+		e2_write_bg_descr(sb, i, &bg);
+		//  Decrement the total free blocks count and rewrite the header to the disk
+		e2->s_free_blocks_count--;
+		block_write(sb->s_dev, 1024, sizeof(*e2), (void*)e2);
+		
+		kfree(bitmap);
+		
 		return block;
 	}
 	
-	// Doubly indirect blocks
-// 	if( block < ((sb->s_blocksize/4)*(sb->s_blocksize/4) + sb->s_blocksize/4 + 12) ){
-// 		u32* blocks = (u32*)kmalloc(sb->s_blocksize);
-// 		e2_read_block(sb, inode->i_block[13], 1, blocks);
-// 		e2_read_block(sb, blocks[block-(sb->s_blocksize/4 + 12)], 1, blocks);
-// 		block = blocks[block
-// 	}
+	return 0;
+}
+
+u32 e2_get_direct_block(struct superblock* sb, e2_inode_t* inode, u32 block)
+{
+	u32 ids_per_block = sb->s_blocksize / 4; // number of block ids within an indirect block
 	
-	// Triply Indirect blocks
+	// Direct Blocks
+	if( block < 12 ){
+		return inode->i_block[block];
+	} else{
+		block -= 12;
+	}
+	
+	u32* blocks = (u32*)kmalloc(sb->s_blocksize);
+	
+	// Indirect blocks
+	if( block < ids_per_block ){
+		u32 indirect = inode->i_block[12];
+		block_read(sb->s_dev, indirect*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
+		block = blocks[block];
+		kfree(blocks);
+		return block;
+	} else {
+		block -= ids_per_block;
+	}
+	
+	// Doubly Idirect
+	if( block < (ids_per_block*ids_per_block) ){
+		block_read(sb->s_dev, inode->i_block[13]*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
+		block_read(sb->s_dev, blocks[block/ids_per_block]*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
+		block = blocks[block % ids_per_block];
+		kfree(blocks);
+	} else {
+		block -= ids_per_block*ids_per_block;
+	}
+	
+	// Triply Indirect Blocks
+	if( block < (ids_per_block*ids_per_block*ids_per_block) ){
+		block_read(sb->s_dev, inode->i_block[14]*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
+		block_read(sb->s_dev, blocks[block/(ids_per_block*ids_per_block)], sb->s_blocksize, (void*)blocks);
+		block_read(sb->s_dev, blocks[(block%(ids_per_block*ids_per_block))/ids_per_block], sb->s_blocksize, (void*)blocks);
+		block = blocks[(block%(ids_per_block*ids_per_block))%ids_per_block];
+		kfree(blocks);
+	} else {
+		return -EINVAL;
+	}
 	
 	return 0;
 }

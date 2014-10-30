@@ -11,10 +11,6 @@ WARNINGS:= -Werror -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align \
 CFLAGS:=-nostdlib -nostartfiles -fno-builtin -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -I $(PROJDIRS)
 LDFLAGS:=-Tstewieos.ld -lgcc -nostdlib
 
-CC:=i586-pc-stewieos-gcc
-LD:=i586-pc-stewieos-gcc
-ASM:=nasm
-
 KERNEL_VERSION:=0.0.1
 KERNEL_ID:=stewieos
 KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)

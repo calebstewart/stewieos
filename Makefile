@@ -31,6 +31,8 @@ FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd perpare_flashdrive cleanup_flashdrive flashdrive
 .PHONY: mount umount
 
+# Exported variables for project makefiles
+export TOOLCHAIN_LOCATION:=$(HOME)/opt/stewieos-cross
 export KERNEL_DIR:=$(abspath ./kernel)
 export MODULES_DIR:=$(abspath ./modules)
 export STEWIEOS_DIR:=$(abspath ./)
@@ -38,9 +40,11 @@ export STEWIEOS_CURRENT:=$(abspath ./stewieos-current)
 export STEWIEOS_BIN:=/mnt/bin
 export STEWIEOS_OPT:=/mnt/opt
 export STEWIEOS_ROOT:=/mnt
+export CC:=$(TOOLCHAIN_LOCATION)/bin/i586-pc-stewieos-gcc
+export LD:=$(CC)
+export ASM:=nasm
 
 all: $(ALLPROJECTS)
-#@echo "Please build each subsystem one at time. Here is a list of subsystems to build:\n$(PROJECTS)\nE.g. \"make all-'subsystemname'\""
 
 clean: $(CLEANPROJECTS)
 

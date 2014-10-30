@@ -4,13 +4,12 @@ CFLAGS:=-g -static
 LDFLAGS:=
 PROJECT_NAME:=test
 
-CC:=i586-pc-stewieos-gcc
-
 .PHONY: all install clean
 
 all: bin/$(PROJECT_NAME)
 
 bin/$(PROJECT_NAME): $(OBJECTS)
+	@mkdir -p ./bin
 	$(CC) -o bin/$(PROJECT_NAME) $(OBJECTS) $(LDFLAGS)
 
 clean:

@@ -9,11 +9,7 @@ WARNINGS:= -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion
 CFLAGS:=-std=gnu99 -nostdlib -nostartfiles -gdwarf-2 -g3 $(WARNINGS) -I$(KERNEL_DIR)/src
-LDFLAGS:= -r -d -nostdlib -Wl,-R,$(STEWIEOS_CURRENT)
-
-CC:=i586-pc-stewieos-gcc
-LD:=i586-pc-stewieos-gcc
-ASM:=nasm
+LDFLAGS:= -r -d -nostdlib
 
 PROJECT_NAME:=module_template
 
@@ -32,6 +28,7 @@ clean:
 	rm -f $(OBJFILES) $(OUTPUT_FILE)
 
 $(OUTPUT_FILE): $(OBJFILES) $(STEWIEOS_CURRENT)
+	@mkdir -p $(OUTPUT_FILE:$(PROJECT_NAME).o=) # Create the bin directory if needed
 	$(CC) $(CFLAGS) -o $(OUTPUT_FILE) $(OBJFILES) $(LDFLAGS)
 
 %.s.o: %.s

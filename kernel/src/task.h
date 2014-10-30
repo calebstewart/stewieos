@@ -23,10 +23,15 @@
 #define TF_ZOMBIE ((u32)0x00000020)
 // The task has just performed an execve and needs the scheduler to "finish up"
 #define TF_EXECVE ((u32)0x00000040)
+// The task is waiting on IO
+#define TF_WAITIO ((u32)0x00000080)
+
+#define TF_WAITMASK (TF_WAITIO | TF_WAITSIG | TF_WAITTASK)
 
 #define T_ISZOMBIE(task) ((task)->t_flags & TF_ZOMBIE)
 #define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
 #define T_EXECVE(task)	((task)->t_flags & TF_EXECVE)
+#define T_WAITING(task)	((task)->t_flags & TF_WAITMASK)
 
 #define TASK_KSTACK_ADDR	0xFFFFD000
 #define TASK_KSTACK_SIZE	0x2000
@@ -74,6 +79,7 @@ struct task
 	list_t			t_children;				// list of child tasks (forked processes)
 	list_t			t_queue;				// link in the current queue
 	list_t			t_globlink;				// link in the global list
+	list_t			t_ttywait;				// link in the tty wait list
 	struct task*		t_parent;				// the parent of this task
 };
 
@@ -82,6 +88,8 @@ void task_preempt(struct regs* regs);
 void task_kill(struct task* task);
 // lookup a task based on process id
 struct task* task_lookup(pid_t pid);
+
+void task_waitio(struct task* task);
 
 pid_t sys_getpid( void );
 int sys_fork( void );

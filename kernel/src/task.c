@@ -63,6 +63,7 @@ void task_init( void )
 	INIT_LIST(&init->t_queue);
 	INIT_LIST(&init->t_children);
 	INIT_LIST(&init->t_globlink);
+	INIT_LIST(&init->t_ttywait);
 	//printk("%2Vtask_init: init->t_dir=%08X\n", init->t_dir);
 	//while(1);
 	// we are still using kerndir up to now
@@ -163,12 +164,13 @@ void task_preempt(struct regs* regs)
 	current->t_flags &= ~TF_RESCHED; // remove the reschedule flag
 
 	// if this task just stopped running, it is no longer in the ready_tasks queue
+	// The same goes if the task is now waiting on IO
 	if( T_RUNNING(current) )
 		current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
 	else
 		current = list_entry(list_first(&ready_tasks), struct task, t_queue);
 	// Check for end of list or dead task
-	while( !current || (current->t_flags & TF_EXIT) )
+	while( !current || (current->t_flags & TF_EXIT) || T_WAITING(current) )
 	{
 		if(!current)
 		{
@@ -254,10 +256,11 @@ void task_kill(struct task* dead)
 	list_rem(&dead->t_queue);
 	list_rem(&dead->t_sibling);
 	list_rem(&dead->t_globlink);
+	list_rem(&dead->t_ttywait);
 	dead->t_flags = TF_ZOMBIE;
 	
-	// we haven't implemented this yet...
-	//free_page_dir(dead->t_dir);
+	// free the tasks page directory
+	free_page_dir(dead->t_dir);
 	
 	// The task is not actually dead yet.
 	// It needs to notify the parent of it's death,
@@ -302,6 +305,17 @@ struct task* task_lookup(pid_t pid)
 	return NULL;
 }
 
+void task_waitio(struct task* task)
+{
+	u32 eflags = disablei();
+	
+	// Set the wait io flag, and reschedule the task
+	task->t_flags &= TF_WAITIO | TF_RESCHED;
+	schedule();
+	
+	restore(eflags);
+}
+
 /* function: sys_fork
  * purpose:
  * 	duplicate a running process
@@ -341,6 +355,7 @@ int sys_fork( void )
 	INIT_LIST(&task->t_sibling);
 	INIT_LIST(&task->t_queue);
 	INIT_LIST(&task->t_globlink);
+	INIT_LIST(&task->t_ttywait);
 	
 	copy_task_vfs(&task->t_vfs, &current->t_vfs);
 
