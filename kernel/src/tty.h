@@ -9,8 +9,6 @@
 #define TTY_QUEUELEN 1024
 #define TTY_NQUEUE 2
 
-#define TTY_
-
 struct _tty_device;
 typedef struct _tty_device tty_device_t;
 struct _tty_driver;
@@ -21,7 +19,7 @@ struct tty_operations
 	int(*putchar)(tty_device_t* tty, char c);
 	int(*write)(tty_device_t* tty, const char* buffer, size_t len);
 	int(*ioctl)(tty_device_t* tty, int cmd, char* parm);
-	int(*open)(tty_device_t* tty);
+	int(*open)(tty_device_t* tty, int omode);
 	int(*close)(tty_device_t* tty);
 };
 
@@ -76,5 +74,7 @@ int tty_end_of_line(tty_device_t* device);
 void tty_ioctl(tty_device_t* device, int cmd, char* parm);
 
 tty_driver_t* tty_alloc_driver(const char* name, unsigned int major, unsigned int nminors, struct tty_operations* ops);
+int tty_free_driver(unsigned int major);
+tty_driver_t* tty_find_driver(unsigned int major);
 
 #endif

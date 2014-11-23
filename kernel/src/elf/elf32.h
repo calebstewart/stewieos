@@ -219,6 +219,13 @@ enum ProgramHeaderTypes
 	PT_HIPROC = 0x7fffffff,		// Upper bound for processor-specific semantics
 };
 
+enum ProgramHeaderFlags
+{
+	PF_X = 1,
+	PF_W = 2,
+	PF_R = 4,
+};
+
 // Data Structures
 
 /* structure: Elf32_Ehdr

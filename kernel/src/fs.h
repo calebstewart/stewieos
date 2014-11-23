@@ -80,6 +80,7 @@ struct file_operations
 	off_t(*lseek)(struct file*, off_t, int);
 	int(*ioctl)(struct file*, int, char*);
 	int(*fstat)(struct file*, struct stat*);
+	int(*isatty)(struct file*);
 };
 
 /* type: struct filesystem_operations
@@ -347,6 +348,7 @@ off_t file_seek(struct file* file, off_t offsets, int whence);
 int file_ioctl(struct file* file, int request, char* argp);
 int file_stat(struct file* file, struct stat* buf);
 int file_readdir(struct file* file, struct dirent* dirent, size_t count);
+int file_isatty(struct file* file);
 
 /* Unix System Call Definitions
  * 
@@ -373,8 +375,12 @@ int sys_chown(const char* path, uid_t owner, gid_t group);
 mode_t sys_umask(mode_t mask);
 int sys_mknod(const char* path, mode_t mode, dev_t dev);
 int sys_readdir(int fd, struct dirent* dirent, size_t count);
+int sys_isatty(int fd);
+int sys_chdir(const char* path);
+int sys_getcwd(char* buf, size_t count);
 
 void copy_task_vfs(struct vfs* dest, struct vfs* src);
 void init_task_vfs(struct vfs* vfs);
+void free_task_vfs(struct vfs* vfs);
 
 #endif

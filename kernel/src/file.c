@@ -229,3 +229,12 @@ int file_stat(struct file* file, struct stat* st)
 	
 	return 0;
 }
+
+int file_isatty(struct file* file)
+{
+	if( file->f_ops->isatty ){
+		return file->f_ops->isatty(file);
+	} else {
+		return -ENOTTY;
+	}
+}

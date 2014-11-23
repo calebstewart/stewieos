@@ -267,3 +267,7 @@ void register_interrupt(u8 n, isr_callback_t callback)
 {
 	isr_callback[n] = callback;
 }
+void unregister_interrupt(u8 n)
+{
+	isr_callback[n] = NULL;
+}

@@ -66,8 +66,6 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	struct path path;
 	exec_t* exec = NULL;
 	int error = 0;
-	//page_dir_t* dir = NULL;
-	//page_dir_t* old_dir = curdir;
 	
 	// Lookup the path from the filename
 	error = path_lookup(filename, WP_DEFAULT, &path);
@@ -162,9 +160,6 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	
 	// Create an empty page directory and free the old one (there's no going back from here...)
 	strip_page_dir(curdir);
-	//dir = copy_page_dir(kerndir);
-	//switch_page_dir(dir);
-	//free_page_dir(old_dir);
 	
 	// Allocate the new tasks user stack space
 	for(u32 addr = TASK_STACK_INIT_BASE; addr < TASK_STACK_START; addr += 0x1000)
@@ -202,13 +197,13 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	// These are the actual arguments to main (argv and envp)
 	*(char***)( (u32)argv - 8 ) = argv;
 	*(char***)( (u32)argv - 4 ) = envp;
-	*(int*)( (u32)argv - 12 ) = argc; 
+	*(int*)( (u32)argv - 12 ) = argc;
 	
 	// Fill the Registers structure so we start at the correct place
 	// and in user mode
 	memset(&current->t_regs, 0, sizeof(current->t_regs));
 	current->t_regs.eip = (u32)exec->entry;
-	current->t_regs.useresp = (u32)argv;
+	current->t_regs.useresp = (u32)argv - 12;
 	current->t_regs.eflags = 0x200200;
 	current->t_regs.cs = 0x1B;
 	current->t_regs.ss = 0x23;
@@ -218,6 +213,7 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	// finish switching as soon as possible.
 	current->t_flags |= TF_EXECVE;
 	current->t_ticks_left = 0;
+	current->t_dataend = (u32)exec->bssend;
 	
 	// Interrupts may have been disabled, just enabled them just in case
 	// It shouldn't matter at this point anyway.

@@ -3,7 +3,7 @@ spin_lock:
 	mov edx,1 ; the value we want in the lock
 	mov ecx,[esp+4]
 	pushf
-	sti
+	;sti
 .loop0:
 	; if( [ecx] == eax ){
 	;	[ecx] = edx

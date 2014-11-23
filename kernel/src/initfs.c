@@ -89,23 +89,18 @@ struct initfs_private
 int initfs_install(multiboot_info_t* mb);
 int initfs_install(multiboot_info_t* mb)
 {
-	printk("INIT: setting up initfs... ");
-	unsigned int cursor = get_cursor_pos();
-	printk("\n");
 	
 	int result = register_filesystem(&initfs);
 	if( result != 0 )
 	{
-		printk("%2VINIT: error: filesystem registration failed with %d.\n", result);
+		return result;
 	} else { 
-		result = sys_mount(NULL, "/", "initfs", MS_RDONLY, ((char*)mb) + KERNEL_VIRTUAL_BASE);
+		result = sys_mount(NULL, "/", "initfs", MS_RDONLY, ((char*)mb));
 		if( result != 0 )
 		{
-			printk("%2VINIT: error: filesystem mounting failed with %d.\n", result);
+			return result;
 		}
 	}
-	
-	printk_at(cursor, "done.\n");
 	return 0;
 }
 

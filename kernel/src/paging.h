@@ -105,6 +105,8 @@ page_dir_t* copy_page_dir(page_dir_t* dir);
 
 void free_page_dir(page_dir_t* dir);
 
+void display_page_dir(page_dir_t* dir);
+
 /*! \brief Copy a page table and its contents
  * 
  * A function taking a dst and src directory and copying the given
@@ -159,6 +161,8 @@ void copy_physical_frame(u32 dest, u32 srce);
  * \return the address to the temporary page (0xFFFFF000)
  */
 void* temporary_map(u32 addr, page_dir_t* other);
+
+void temporary_unmap(void);
 
 /*! \brief Flush a Translation Lookaside Buffer Entry
  * 

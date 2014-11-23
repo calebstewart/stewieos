@@ -1,6 +1,6 @@
 SOURCES:=src/main.c
 OBJECTS:=$(SOURCES:.c=.o)
-CFLAGS:=-g -static
+CFLAGS:=-g -static -std=gnu11
 LDFLAGS:=
 PROJECT_NAME:=template
 
@@ -17,4 +17,5 @@ clean:
 	rm -f bin/$(PROJECT_NAME)
 
 install:
-	cp -f bin/$(PROJECT_NAME) $(STEWIEOS_ROOT)/bin
+	strip -o $(STEWIEOS_ROOT)/bin/$(PROJECT_NAME) -s bin/$(PROJECT_NAME)
+#	cp -f bin/$(PROJECT_NAME) $(STEWIEOS_ROOT)/bin

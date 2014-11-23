@@ -1,5 +1,5 @@
 # This is where you can add project directories to the build-chain
-PROJECTS:=test
+PROJECTS:=INIT sh echo ls penis
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)

@@ -22,7 +22,7 @@ all: $(PROJECT_NAME)
 $(PROJECT_NAME): $(OUTPUT_FILE)
 
 install:
-	cp $(OUTPUT_FILE) $(MODULE_INSTALL_DIR)
+	strip -S -o $(MODULE_INSTALL_DIR)/$(PROJECT_NAME).o $(OUTPUT_FILE)
 
 clean:
 	rm -f $(OBJFILES) $(OUTPUT_FILE)

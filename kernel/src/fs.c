@@ -178,7 +178,7 @@ struct filesystem* get_filesystem(const char* id)
  */
 void initialize_filesystem( void )
 {
-	vfs_root = d_alloc("/", NULL);
+	vfs_root = d_alloc("", NULL);
 	if( IS_ERR(vfs_root) ){
 		printk("%2Vvfs: error: unable to allocate root directory entry!\n");
 	}
@@ -207,6 +207,12 @@ void copy_task_vfs(struct vfs* d, struct vfs* s)
 {
 	memset(d, 0, sizeof(struct vfs));
 	path_copy(&d->v_cwd, &s->v_cwd);
+// 	for(int i = 0; i < 1024; ++i){
+// 		if( s->v_openvect[i].flags & FD_OCCUPIED ){
+// 			d->v_openvect[i].flags = s->v_openvect[i].flags;
+// 			d->v_openvect[i].file = s->v_openvect[i].file;
+// 		}
+// 	}
 }
 
 void init_task_vfs(struct vfs* vfs)
@@ -214,6 +220,17 @@ void init_task_vfs(struct vfs* vfs)
 	memset(vfs, 0, sizeof(struct vfs));
 	vfs->v_cwd.p_dentry = d_get(vfs_root);
 	vfs->v_cwd.p_mount = NULL;
+}
+
+void free_task_vfs(struct vfs* vfs)
+{
+	path_put(&vfs->v_cwd);
+	for(int i = 0; i < 1024; ++i){
+		if( vfs->v_openvect[i].flags & FD_OCCUPIED ){
+			file_close(vfs->v_openvect[i].file);
+			vfs->v_openvect[i].flags = 0;
+		}
+	}
 }
 
 int path_lookup(const char* name, int flags, struct path* path)
@@ -224,6 +241,10 @@ int path_lookup(const char* name, int flags, struct path* path)
 	char			*slash;
 	struct dentry		*child;
 	int			error = 0;
+	
+	if( name == NULL ){
+		return -EEXIST;
+	}
 	
 	if( strlen(name) > 511 ){
 		return -ENAMETOOLONG;
@@ -293,6 +314,9 @@ int path_lookup(const char* name, int flags, struct path* path)
 		// and return
 		if( slash == NULL )
 		{
+			if( *iter == 0 ){
+				break;
+			}
 			// We only need the parent anyway
 			if( flags & WP_PARENT ) {
 				return 0;
@@ -961,6 +985,24 @@ int sys_fstat(int fd, struct stat* st)
 	return file_stat(file, st);
 }
 
+/* function: sys_isatty
+ * parameters:
+ * 	fd: the file descriptor to test
+ * return value: 
+ * 	Returns 1 for a valid tty, and a negative error value otherwise.
+ * 	Valid errors are:
+ * 		EBADF for a bad file descriptor
+ * 		EINVAL or ENOTTY for a file descriptor which is not a tty
+ */
+int sys_isatty(int fd)
+{
+	if( !FD_VALID(fd) ){
+		return -EBADF;
+	}
+	struct file* file = current->t_vfs.v_openvect[fd].file;
+	return file_isatty(file);
+}
+
 int path_access(struct path* path, int mode)
 {
 	if( mode != F_OK && (mode & ~(X_OK|W_OK|R_OK)) != 0 ){
@@ -1163,6 +1205,69 @@ int sys_ioctl(int fd, int request, char* argp)
 	}
 	
 	return file_ioctl(file, request, argp);
+}
+
+int sys_chdir(const char* name)
+{
+	struct path path;
+	int result;
+	
+	result = path_lookup(name, WP_DEFAULT, &path);
+	if( result < 0 ){
+		return result;
+	}
+	
+	if( !S_ISDIR(path.p_dentry->d_inode->i_mode) ){
+		path_put(&path);
+		return -ENOTDIR;
+	}
+	
+	path_put(&current->t_vfs.v_cwd);
+	path_copy(&current->t_vfs.v_cwd, &path);
+	
+	return 0;
+}
+
+// recursive function to build the path string of a dentry
+int _build_path(int first __attribute__((unused)), char** buf, char* end, struct dentry *dentry);
+int _build_path(int first __attribute__((unused)), char** buf, char* end, struct dentry *dentry)
+{
+	if( dentry->d_parent ){
+		int result = _build_path(0, buf, end, dentry->d_parent);
+		if( result < 0 ){
+			return result;
+		}
+	}
+	// Is there room for this name?
+	if( (size_t)(end-*buf) < strlen(dentry->d_name) ){
+		return -ENAMETOOLONG;
+	}
+	
+	// Copy the name and increment the iterator
+	strcpy(*buf, dentry->d_name);
+	*buf += strlen(dentry->d_name);
+	
+	if( dentry->d_inode == NULL || S_ISDIR(dentry->d_inode->i_mode) ){
+		if( (size_t)(end-*buf) == 0 ){
+			return -ENAMETOOLONG;
+		}
+		*(*buf) = '/';
+		(*buf)++;
+	}
+	
+	return 0;
+}
+
+int sys_getcwd(char* buf, size_t len)
+{
+	struct dentry* dentry = current->t_vfs.v_cwd.p_dentry;
+	
+	int result = _build_path(1, &buf, &buf[len-2], dentry);
+	if( result == 0 ){
+		*buf = 0;
+	}
+	
+	return result;
 }
 
 /* function: super_get

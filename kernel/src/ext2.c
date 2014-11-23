@@ -217,7 +217,7 @@ int e2_dir_inode_lookup(struct inode* inode, struct dentry* dentry)
 			if( iter->inode != 0 )
 			{
 				// Check the name
-				if( strncmp(dentry->d_name, iter->name, iter->name_len) == 0 ){
+				if( strlen(dentry->d_name) == iter->name_len && strncmp(dentry->d_name, iter->name, iter->name_len) == 0 ){
 					dentry->d_inode = i_get(sb, (ino_t)iter->inode);
 					dentry->d_ino = (ino_t)iter->inode;
 					kfree(dirent);
@@ -581,6 +581,10 @@ u32 e2_get_direct_block(struct superblock* sb, e2_inode_t* inode, u32 block)
 	// Doubly Idirect
 	if( block < (ids_per_block*ids_per_block) ){
 		block_read(sb->s_dev, inode->i_block[13]*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
+		if( blocks[block/ids_per_block] == 0 ){
+			kfree(blocks);
+			return 0;
+		}
 		block_read(sb->s_dev, blocks[block/ids_per_block]*sb->s_blocksize, sb->s_blocksize, (void*)blocks);
 		block = blocks[block % ids_per_block];
 		kfree(blocks);
@@ -644,7 +648,7 @@ ssize_t e2_read_inode_data(struct superblock* sb, struct inode* inode, off_t off
 		{
 			block = e2_get_direct_block(sb, e2ino, start_bid);
 			if( block == 0 ){
-				return requested_size - size;
+				return (i * sb->s_blocksize);
 			}
 			result = block_read(sb->s_dev, block*sb->s_blocksize, sb->s_blocksize, buffer);
 			if( result < 0 ){
@@ -652,8 +656,8 @@ ssize_t e2_read_inode_data(struct superblock* sb, struct inode* inode, off_t off
 			}
 			start_bid++;
 			buffer += sb->s_blocksize;
-			size -= sb->s_blocksize;
 		}
+		size = (size % sb->s_blocksize);
 	}
 	
 	// One last partial block
@@ -709,7 +713,7 @@ int e2_file_readdir(struct file* file, struct dirent* dirent, size_t count)
 		ssize_t completed = e2_read_inode_data(file_inode(file)->i_super, file_inode(file), file->f_off, 264, (void*)e2dirent);
 		if( completed < 0 ){
 			kfree(e2dirent);
-			return completed;
+			return (int)completed;
 		} else if( completed == 0 ){
 			kfree(e2dirent);
 			return i;

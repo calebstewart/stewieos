@@ -1,4 +1,6 @@
 #include "kernel.h"
+#include "timer.h"
+#include "serial.h"
 
 #define CURSOR_INDEX(monitor) (( (monitor).cx + (monitor).cy*(monitor).width )*2)
 
@@ -38,9 +40,10 @@ static char output_level_colors[3] = {
 	0x04,				// Output level 3, Red on black
 };
 
-int(*internal_printk)(const char*,__builtin_va_list) = initial_printk;
+//int(*internal_printk)(const char*,__builtin_va_list) = initial_printk;
 
-static void put_char(char c, int flags, int width, int precision);				// puts a character to the screen
+static void initial_vga_put_char(char c, int flags, int width, int precision);			// puts a character to the screen
+static void serial_put_char(char c, int flags, int width, int precision);			// puts a character out to the serial port
 static int put_str(const char* s, int flags, int width, int precision);				// put a string to the the screen
 static int put_int(long int v, int flags, int width, int precision);				// put an integer on the screen
 static int put_uint(unsigned long int v, int flags, int width, int precision, int base);	// put an unsigned integer on the screen
@@ -50,12 +53,20 @@ static void scroll_screen(int count);								// Scroll count lines upwards
 
 void set_cursor_pos(unsigned int pos);
 
+// The initial put character function simply outputs to the VGA text-mode console (later it will use the serial ports)
+printk_putchar_func_t put_char = initial_vga_put_char;
+
+void switch_printk_to_serial( void )
+{
+	put_char = serial_put_char;
+}
+
 int printk(const char* fmt, ...)
 {
 	__builtin_va_list ap;
 	__builtin_va_start(ap, fmt);
 	int result = internal_printk(fmt, ap);
-	update_cursor();
+	//update_cursor();
 	return result;
 }
 
@@ -227,7 +238,7 @@ static int put_uint(unsigned long int v, int flags, int width, int precision, in
 }
 
 /* The initial printk function to print to the VGA console buffer */
-int initial_printk(const char* format, __builtin_va_list ap)
+int internal_printk(const char* format, __builtin_va_list ap)
 {
 	int count = 0;
 	int flags = 0;
@@ -239,6 +250,10 @@ int initial_printk(const char* format, __builtin_va_list ap)
 	char original_color = monitor.color;
 	//__builtin_va_list ap;
 	//__builtin_va_start(ap, format);
+	
+	put_char('[',0,0,0);
+	put_uint(timer_get_ticks(), 0, 0, 0, 10);
+	put_str("] ", 0, 0, 0);
 	
 	while(*format){
 		
@@ -368,6 +383,10 @@ int initial_printk(const char* format, __builtin_va_list ap)
 				monitor.color = output_level_colors[width];
 			} else if( specifier == 'C' ){ // Specifier is to change the color
 				monitor.color = (char)((width&0x0F) | 0x00);
+			} else if( specifier == 't' ){ // dump kernel time
+				put_char('[',0,0,0);
+				put_uint(timer_get_ticks(), 0,0,0, 10);
+				put_str("] ",0,0,0);
 			}
 			
 			
@@ -384,6 +403,12 @@ complete:
 	return count;
 }
 
+static void serial_put_char(char c, int flags __attribute__((unused)), int width __attribute__((unused)), int precision __attribute__((unused)))
+{
+	serial_device_t* device = serial_get_device(0);
+	serial_write(device, &c, 1);
+}
+
 /* function: put_char
  * params:
  * 	char c - the character to be written
@@ -391,7 +416,7 @@ complete:
  * 	writes a single character to he screen at the current cursor
  * 	position
  */
-static void put_char(char c, int flags, int width, int precision)
+static void initial_vga_put_char(char c, int flags, int width, int precision)
 {
 	UNUSED(precision);
 	UNUSED(flags);
@@ -454,6 +479,8 @@ static void put_char(char c, int flags, int width, int precision)
 		}
 	} // end monitor.cx == monitor.width
 	
+	update_cursor();
+	
 } // end put_char
 
 /* function: cursor_pos
@@ -462,10 +489,10 @@ static void put_char(char c, int flags, int width, int precision)
  * purpose:
  * 	Retrieve the current cursor as (x + y*width)
  */
-unsigned int get_cursor_pos(void )
-{
-	return monitor.cx + monitor.cy*monitor.width;
-}
+// unsigned int get_cursor_pos(void )
+// {
+// 	return monitor.cx + monitor.cy*monitor.width;
+// }
 
 /* function: set_cursor_pos
  * params:
@@ -479,30 +506,6 @@ void set_cursor_pos(unsigned int idx)
 {
 	monitor.cx = idx % monitor.width;
 	monitor.cy = (unsigned int)(idx / monitor.width);
-}
-
-/* function: printk_at
- * parames:
- * 	pos - the cursor position as the function pos=x+y*monitor_width
- *	fmt - same as printk
- * 	... - same as printk
- * returns:
- *	same as printk
- */
-int printk_at(unsigned int pos, const char* fmt, ...)
-{
-	unsigned int old_pos = get_cursor_pos();
-	set_cursor_pos(pos);
-	
-	__builtin_va_list ap;
-	__builtin_va_start(ap, fmt);
-	
-	int result = internal_printk(fmt, ap);
-	
-	set_cursor_pos(old_pos);
-	update_cursor();
-	
-	return result;
 }
 
 /* function: clear_screen

@@ -7,6 +7,8 @@ list_t			ready_tasks;		// list of ready tasks
 list_t			task_globlist;		// global list of all tasks
 //struct task		*ready_tasks;		// list of ready tasks
 pid_t			next_pid = 0;		// the next process id
+pid_t			foreground_pid = 0;	// The foreground task
+char			g_fpu_state[512] __attribute__((aligned(16))); // fpu state
 
 /* function: sys_getpid
  * purpose:
@@ -19,6 +21,20 @@ pid_t			next_pid = 0;		// the next process id
 pid_t sys_getpid( void )
 {
 	return current->t_pid;
+}
+
+pid_t task_getfg( void )
+{
+	return foreground_pid;
+}
+
+void task_setfg(pid_t pid)
+{
+	// Only set it for valid tasks
+	if( task_lookup(pid) == NULL ){
+		return;
+	}
+	foreground_pid = pid;
 }
 
 /* function: task_init
@@ -162,6 +178,8 @@ void task_preempt(struct regs* regs)
 	current->t_esp = esp;
 	current->t_ebp = ebp;
 	current->t_flags &= ~TF_RESCHED; // remove the reschedule flag
+	asm volatile("fxsave %0;" :: "m"(g_fpu_state));
+	memcpy(current->t_fpu, g_fpu_state, 512);
 
 	// if this task just stopped running, it is no longer in the ready_tasks queue
 	// The same goes if the task is now waiting on IO
@@ -172,7 +190,7 @@ void task_preempt(struct regs* regs)
 	// Check for end of list or dead task
 	while( !current || (current->t_flags & TF_EXIT) || T_WAITING(current) )
 	{
-		if(!current)
+		if(!current || T_WAITING(current))
 		{
 			current = list_next(&ready_tasks, struct task, t_queue, &ready_tasks);
 			continue;
@@ -191,6 +209,10 @@ void task_preempt(struct regs* regs)
 	ebp = current->t_ebp;
 	curdir = current->t_dir;
 	current->t_ticks_left = 15;
+	memcpy(g_fpu_state, current->t_fpu, 512);
+	asm volatile("fxrstor %0;"::"m"(g_fpu_state));
+	
+	//printk("switching to task with pid=%d and dir=%p.\n", current->t_pid, current->t_dir);
 	
 	/*
 	 * push the flags register onto the current stack
@@ -243,14 +265,15 @@ void task_kill(struct task* dead)
 	}
 	
 	// While this isn't ideal, it will stop doing this once the child exits... it should probably be removed from the ready queue, though!
-	if( !list_empty(&dead->t_children) )
-	{
-		//debug_message("warning: unable to kill parent task with running children!", 0);
-		//debug_message("\ttask %d is not killed, but is not running either.", dead->t_pid);
-		return;
-	}
+// 	if( !list_empty(&dead->t_children) )
+// 	{
+// 		list_rem(dead->t_queue); // remove from ready queue
+// 		return;
+// 	}
 	
 	debug_message("killing task with id=%d", dead->t_pid);
+	
+	free_task_vfs(&dead->t_vfs);
 	
 	// remove the task from the running queue
 	list_rem(&dead->t_queue);
@@ -262,13 +285,19 @@ void task_kill(struct task* dead)
 	// free the tasks page directory
 	free_page_dir(dead->t_dir);
 	
+	while( !list_empty(&dead->t_children) ){
+		struct task* child = list_entry(list_first(&dead->t_children), struct task, t_sibling);
+		child->t_parent = NULL;
+		list_rem(&child->t_sibling);
+	}
+	
 	// The task is not actually dead yet.
 	// It needs to notify the parent of it's death,
 	// then the parent will do what it needs to.
 	// if the parent isn't listening, the child
 	// will be cleaned up upon the parents death.
 	
-	if( dead->t_parent->t_flags & TF_WAITTASK )
+	if( dead->t_parent && (dead->t_parent->t_flags & TF_WAITTASK) == TF_WAITTASK )
 	{
 		if( dead->t_parent->t_waitfor == -1 || \
 			(dead->t_parent->t_waitfor == 0 && dead->t_gid == dead->t_parent->t_pid) || \
@@ -277,9 +306,10 @@ void task_kill(struct task* dead)
 		{
 			dead->t_parent->t_waitfor = dead->t_pid;
 			dead->t_parent->t_status = dead->t_status;
-			dead->t_parent->t_flags &= ~TF_WAITTASK;
-			dead->t_parent->t_flags |= TF_RUNNING;
-			list_add(&dead->t_parent->t_queue, &ready_tasks); 
+			task_wakeup(dead->t_parent);
+// 			dead->t_parent->t_flags &= ~TF_WAITTASK;
+// 			dead->t_parent->t_flags |= TF_RUNNING;
+// 			list_add(&dead->t_parent->t_queue, &ready_tasks); 
 		}
 	}
 	
@@ -310,10 +340,43 @@ void task_waitio(struct task* task)
 	u32 eflags = disablei();
 	
 	// Set the wait io flag, and reschedule the task
-	task->t_flags &= TF_WAITIO | TF_RESCHED;
+	list_rem(&task->t_queue);
+	task->t_flags |= (TF_WAITIO | TF_RESCHED);
 	schedule();
 	
 	restore(eflags);
+}
+
+void task_wakeup(struct task* task)
+{
+	u32 eflags = disablei();
+	
+	list_add(&task->t_queue, &ready_tasks);
+	task->t_flags &= ~(TF_WAITMASK | TF_RESCHED);
+	task->t_flags |= TF_RUNNING;
+	
+	restore(eflags);
+}
+
+/* function: sys_sbrk
+ * purpose:
+ * 	expand memory at the end of a process for heaps and such
+ * arguments:
+ * 	incr	- the amount to increment
+ * return value:
+ * 	address	- the old value of the break (pointer to new memory)
+ */
+caddr_t sys_sbrk(int incr)
+{
+	caddr_t result = (caddr_t)current->t_dataend;
+	u32 addr = current->t_dataend & 0xFFFFF000;
+	
+	while( addr < ((u32)result + incr) ){
+		alloc_page(current->t_dir, (void*)addr, 1, 1);
+		addr += 0x1000;
+	}
+	
+	return result;
 }
 
 /* function: sys_fork
@@ -394,7 +457,10 @@ int sys_fork( void )
 	// the task is ready to run
 	// and the parent will give up its timeslice
 	task->t_flags = TF_RUNNING;
-	current->t_flags |= TF_RESCHED;
+	//current->t_flags |= TF_RESCHED;
+	
+	// This task is now the foreground
+	task_setfg(task->t_pid);
 	
 	
 	restore(eflags);
@@ -424,6 +490,12 @@ void sys_exit( int result )
 	
 	current->t_status = result;
 	current->t_flags = TF_EXIT;
+	
+	if( current->t_parent && current->t_pid == task_getfg() ){
+		task_setfg(current->t_parent->t_pid);
+	} else {
+		task_setfg(0);
+	}
 	
 	schedule();
 	
@@ -508,9 +580,14 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 		// Remove ourself from the running queue
 		list_rem(&current->t_queue);
 		
+		u32 cr3 = 0;
+		asm volatile ("movl %%cr3,%0;" : "=r"(cr3));
+		
 		// reschedule the task system (we already set the reschedule flag for this task
 		// so it will pick a new one, and not return until TF_WAITTASK is unset).
 		schedule();
+		
+		asm volatile ("movl %%cr3,%0;" : "=r"(cr3));
 
 		// the task_kill function for the other task will store
 		// its' pid and status information in our task structure
@@ -519,6 +596,10 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 	}
 	
 	struct task* task = task_lookup(pid);
+	if( !task ){
+		restore(eflags);
+		return pid;
+	}
 	list_rem(&task->t_sibling); // remove from the parent-child list
 	list_rem(&task->t_globlink); // remove from the global task list
 	// the tasks runtime data should have already been free'd, we just need

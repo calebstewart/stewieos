@@ -20,6 +20,7 @@ typedef int spinlock_t;
 
 // This is just a wrapper. spin_init should be called before atomicity is needed
 #define spin_init(spinlock) do{ spin_unlock((spinlock)); } while(0)
+#define init_spin(name) (0)
 
 // lock and unlock a spinlock
 void spin_lock(spinlock_t* spinlock);

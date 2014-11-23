@@ -32,6 +32,7 @@
 #define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
 #define T_EXECVE(task)	((task)->t_flags & TF_EXECVE)
 #define T_WAITING(task)	((task)->t_flags & TF_WAITMASK)
+#define T_EXITING(task)	((task)->t_flags & TF_EXIT)
 
 #define TASK_KSTACK_ADDR	0xFFFFD000
 #define TASK_KSTACK_SIZE	0x2000
@@ -71,6 +72,10 @@ struct task
 	
 	mode_t			t_umask;				// The current umask
 	
+	u32			t_dataend;				// End of the data (used for sbrk)
+	
+	char			t_fpu[512];				// FPU state (For FXSAVE and FXRSTOR)
+	
 	struct page_dir*	t_dir;					// page directory for this task
 	struct vfs		t_vfs;					// this tasks virtual file system information
 	struct regs		t_regs;					// Register Information for the task switch after an execve
@@ -90,7 +95,12 @@ void task_kill(struct task* task);
 struct task* task_lookup(pid_t pid);
 
 void task_waitio(struct task* task);
+void task_wakeup(struct task* task);
 
+pid_t task_getfg( void );
+void task_setfg(pid_t pid);
+
+caddr_t sys_sbrk(int incr);
 pid_t sys_getpid( void );
 int sys_fork( void );
 void sys_exit( int result );

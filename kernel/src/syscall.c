@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "error.h"
+#include <dirent.h>
 
 DECL_SYSCALL(syscall_exit);
 DECL_SYSCALL(syscall_open);
@@ -18,6 +19,14 @@ DECL_SYSCALL(syscall_fork);
 DECL_SYSCALL(syscall_execve);
 DECL_SYSCALL(syscall_getpid);
 DECL_SYSCALL(syscall_lseek);
+DECL_SYSCALL(syscall_insmod);
+DECL_SYSCALL(syscall_rmmod);
+DECL_SYSCALL(syscall_sbrk);
+DECL_SYSCALL(syscall_isatty);
+DECL_SYSCALL(syscall_waitpid);
+DECL_SYSCALL(syscall_readdir);
+DECL_SYSCALL(syscall_chdir);
+DECL_SYSCALL(syscall_getcwd);
 
 syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXIT] = syscall_exit,
@@ -32,6 +41,14 @@ syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXECVE] = syscall_execve,
 	[SYSCALL_GETPID] = syscall_getpid,
 	[SYSCALL_LSEEK] = syscall_lseek,
+	[SYSCALL_INSMOD] = syscall_insmod,
+	[SYSCALL_RMMOD] = syscall_rmmod,
+	[SYSCALL_SBRK] = syscall_sbrk,
+	[SYSCALL_ISATTY] = syscall_isatty,
+	[SYSCALL_WAITPID] = syscall_waitpid,
+	[SYSCALL_READDIR] = syscall_readdir,
+	[SYSCALL_CHDIR] = syscall_chdir,
+	[SYSCALL_GETCWD] = syscall_getcwd,
 };
 
 void syscall_handler(struct regs* regs)
@@ -65,7 +82,7 @@ void syscall_read(struct regs* regs)
 
 void syscall_write(struct regs* regs)
 {
-	//printk("%s", regs->ecx);
+	//printk("%s\n", regs->ecx);
 	//regs->eax = regs->edx;
 	//return;
 	regs->eax = (u32)sys_write((int)regs->ebx, (const char*)regs->ecx, (size_t)regs->edx);
@@ -104,4 +121,44 @@ void syscall_execve(struct regs* regs)
 void syscall_getpid(struct regs* regs)
 {
 	regs->eax = (u32)current->t_pid;
+}
+
+void syscall_insmod(struct regs* regs)
+{
+	regs->eax = (u32)sys_insmod((const char*)regs->ebx);
+}
+
+void syscall_rmmod(struct regs* regs)
+{
+	regs->eax = (u32)sys_rmmod((const char*)regs->ebx);
+}
+
+void syscall_sbrk(struct regs* regs)
+{
+	regs->eax = (u32)sys_sbrk((int)regs->ebx);
+}
+
+void syscall_isatty(struct regs* regs)
+{
+	regs->eax = (u32)sys_isatty((int)regs->ebx);
+}
+
+void syscall_waitpid(struct regs* regs)
+{
+	regs->eax = (u32)sys_waitpid((pid_t)regs->ebx, (int*)regs->ecx, (int)regs->edx);
+}
+
+void syscall_readdir(struct regs* regs)
+{
+	regs->eax = (u32)sys_readdir((int)regs->ebx, (struct dirent*)regs->ecx, (size_t)regs->edx);
+}
+
+void syscall_chdir(struct regs* regs)
+{
+	regs->eax = (u32)sys_chdir((const char*)regs->ebx);
+}
+
+void syscall_getcwd(struct regs* regs)
+{
+	regs->eax = (u32)sys_getcwd((char*)regs->ebx, (size_t)regs->ecx);
 }

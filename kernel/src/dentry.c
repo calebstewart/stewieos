@@ -89,7 +89,7 @@ struct dentry* d_alloc_root(struct inode* inode)
 	struct dentry		*root = NULL;		// the newly allocated directory entry
 	
 	// create a parentless directory entry
-	root = d_alloc("/", NULL);
+	root = d_alloc("", NULL);
 	// abort if we could not allocate the directory entry
 	if( IS_ERR(root) ){
 		return root;

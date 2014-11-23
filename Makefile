@@ -26,7 +26,8 @@ PROJECTS:=kernel modules user
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
-FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
+#FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
+FLASHDRIVE=/dev/sdb1
 
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd perpare_flashdrive cleanup_flashdrive flashdrive
 .PHONY: mount umount
@@ -37,6 +38,7 @@ export KERNEL_DIR:=$(abspath ./kernel)
 export MODULES_DIR:=$(abspath ./modules)
 export STEWIEOS_DIR:=$(abspath ./)
 export STEWIEOS_CURRENT:=$(abspath ./stewieos-current)
+export STEWIEOS_IMAGE:=$(abspath ./stewieos.dd)
 export STEWIEOS_BIN:=/mnt/bin
 export STEWIEOS_OPT:=/mnt/opt
 export STEWIEOS_ROOT:=/mnt
@@ -55,7 +57,7 @@ mount: prepare_vhd
 umount: cleanup_vhd
 
 prepare_vhd:
-	losetup /dev/loop0 ./stewieos.vhd
+	losetup /dev/loop0 $(STEWIEOS_IMAGE)
 	kpartx -v -a /dev/loop0
 	mount /dev/mapper/loop0p1 /mnt
 	

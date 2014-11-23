@@ -74,7 +74,7 @@ void elf_allocate_range(Elf32_Addr start, Elf32_Addr end, int user, int rw)
 void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw)
 {
 	while( start <= end ){
-		page_t* page = get_page(curdir, 1, (void*)start);
+		page_t* page = get_page((void*)start, 1, curdir);
 		page->rw = (unsigned char)(rw & 1);
 		page->user = (unsigned char)(user & 1);
 		start += 0x1000;
@@ -110,6 +110,8 @@ int elf_load_exec(exec_t* exec)
 	file_seek(exec->file, ehdr->e_phoff, SEEK_SET);
 	file_read(exec->file, phdr, ehdr->e_phnum * ehdr->e_phentsize);
 	
+	exec->bssend = 0;
+	
 	for(Elf32_Word i = 0; i < ehdr->e_phnum; ++i)
 	{
 		if( phdr[i].p_type == PT_LOAD )
@@ -122,6 +124,11 @@ int elf_load_exec(exec_t* exec)
 			// Clear extra "uninitialized" memory
 			if( (phdr[i].p_memsz - phdr[i].p_filesz) > 0  ) {
 				memset((void*)( phdr[i].p_vaddr + phdr[i].p_filesz ), 0, phdr[i].p_memsz - phdr[i].p_filesz);
+			}
+			elf_modify_range(phdr[i].p_vaddr & 0xfffff000, (phdr[i].p_vaddr+phdr[i].p_memsz)&0xfffff000, ( (phdr[i].p_flags & PF_R) != 0 ), ( (phdr[i].p_flags & PF_W) != 0 ));
+			// we need to tell the kernel where the end of the executable is for sbrk stuff
+			if( (u32)exec->bssend < (phdr[i].p_vaddr+phdr[i].p_memsz) ){
+				exec->bssend = (void*)(phdr[i].p_vaddr+phdr[i].p_memsz);
 			}
 		}
 		
@@ -279,11 +286,29 @@ module_t* elf_load_module(struct file* file)
 			// Apply The Relocations
 			if( shtab[i].sh_type == SHT_REL ){
 				for(size_t r = 0; r < (shtab[i].sh_size/sizeof(Elf32_Rel)); ++r){
-					elf_relocate(file, &ehdr, shtab, &rtab[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr, shtab[symhdr->sh_link].sh_size, NULL);
+					int err = elf_relocate(file, &ehdr, shtab, &rtab[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr, shtab[symhdr->sh_link].sh_size, NULL);
+					if( err != 0 ){
+						kfree(rtab);
+						kfree(stab);
+						kfree(symstr);
+						kfree(shtab);
+						kfree(shstrtab);
+						kfree(module_base);
+						return ERR_PTR(err);
+					}
 				}
 			} else {
 				for(size_t r = 0; r < (shtab[i].sh_size/sizeof(Elf32_Rela)); ++r){
-					elf_relocate(file, &ehdr, shtab, (Elf32_Rel*)&((Elf32_Rela*)rtab)[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr,shtab[symhdr->sh_link].sh_size, &((Elf32_Rela*)rtab)[r].r_addend);
+					int err = elf_relocate(file, &ehdr, shtab, (Elf32_Rel*)&((Elf32_Rela*)rtab)[r], (Elf32_Addr)module_base, shtab[shtab[i].sh_info].sh_offset - sizeof(Elf32_Ehdr), stab, symstr,shtab[symhdr->sh_link].sh_size, &((Elf32_Rela*)rtab)[r].r_addend);
+					if( err != 0 ){
+						kfree(rtab);
+						kfree(stab);
+						kfree(symstr);
+						kfree(shtab);
+						kfree(shstrtab);
+						kfree(module_base);
+						return ERR_PTR(err);
+					}
 				}
 			}
 			

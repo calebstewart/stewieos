@@ -37,6 +37,7 @@ u32 find_free_frame( void )
 	{
 		if( physical_frame[i] == 0xFFFFFFFF ) continue;
 		for(u32 m = 0; m < 32; m++){
+			if( i == 0 && m == 0 ) continue;
 			if( !(physical_frame[i] & (u32)(1<<m)) ){
 				return i*4*8 + m;
 			}
@@ -60,12 +61,13 @@ void release_frame(u32 idx)
 void alloc_frame(page_t* page, int user, int rw)
 {
 	//printk("PHYSICAL_ADDRESS: %p\n", physical_frame);
-	if( page->frame != 0 ){
+	if( page->present != 0 ){
 		printk("%1Vwarning: attempting to map to an address already in use!\n");
 		while(1);
 		return;
 	}
 	
+	u32 flags = disablei();
 	u32 idx = find_free_frame();
 	if( idx == (u32)-1 ){
 		printk("%2VOUT OF MEMORY!\n");
@@ -76,6 +78,7 @@ void alloc_frame(page_t* page, int user, int rw)
 	page->user = user ? 1 : 0;
 	page->rw = rw ? 1 : 0;
 	page->frame = (idx & 0x000FFFFF);
+	restore(flags);
 	return;
 }
 
@@ -89,8 +92,9 @@ void clone_frame(page_t* dst, page_t* src)
 
 void free_frame(page_t* page) 
 {
-	if( !page->frame ) return;
+	if( !page->present ) return;
 	
 	release_frame(page->frame);
 	page->frame = 0;
+	page->present = 0;
 }

@@ -44,6 +44,14 @@ void init_paging( multiboot_info_t* mb )
 		if( (mb->u.elf_sec.addr + (mb->u.elf_sec.num*mb->u.elf_sec.size)) > placement_address ){
 			placement_address = (mb->u.elf_sec.addr + (mb->u.elf_sec.num*mb->u.elf_sec.size));
 		}
+		Elf32_Shdr* shdr = (Elf32_Shdr*)mb->u.elf_sec.addr;
+		for(size_t i = 0; i < mb->u.elf_sec.num; ++i){
+			if( shdr[i].sh_type == SHT_SYMTAB || shdr[i].sh_type == SHT_STRTAB ){
+				if( (shdr[i].sh_addr+KERNEL_VIRTUAL_BASE+shdr[i].sh_size) > placement_address ){
+					placement_address = shdr[i].sh_addr+KERNEL_VIRTUAL_BASE+shdr[i].sh_size;
+				}
+			}
+		}
 	}
 	
 	physical_frame_count = memory_size / 0x1000; // number of frames
@@ -111,10 +119,20 @@ void init_paging( multiboot_info_t* mb )
 	initial_switch_dir((void*)curdir->phys);
 	
 	for( u32 a = 0x00100000; a < KERNEL_VIRTUAL_BASE; a += 0x1000){
-		page_t* page = get_page((void*)a, 0, kerndir);
-		if( !page ) continue;
-		page->present = 0;
-		page->frame = 0;
+		u32 dir_idx = (a >> 22) & 0x3FF;
+		
+		if( !kerndir->table[dir_idx] ) continue;
+		
+		for(u32 p = 0; p < 1024; ++p){
+			free_frame(&kerndir->table[dir_idx]->page[p]);
+		}
+		kerndir->table[dir_idx] = NULL;
+		kerndir->tablePhys[dir_idx] = 0;
+		
+// 		page_t* page = get_page((void*)a, 0, kerndir);
+// 		if( !page ) continue;
+// 		page->present = 0;
+// 		page->frame = 0;
 	}
 	
 	init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
@@ -137,7 +155,7 @@ int alloc_page(page_dir_t* dir, void* addr, int user, int rw)
 {
 	page_t* page = get_page(addr, 1, dir);
 
-	if( page->frame != 0 ){
+	if( page->present != 0 ){
 		return 0;
 	}
 	
@@ -212,6 +230,18 @@ void* temporary_map(u32 addr, page_dir_t* dir)
 	return (void*)0xFFFFF000;
 }
 
+void temporary_unmap(void)
+{
+	page_t* dst_page = &curdir->table[(0xFFFFF000>>22)&0x3ff]->page[(0xFFFFF000>>12)&0x3ff];
+	// set the page to point to the same frame
+	dst_page->present = 0;
+	dst_page->rw = 0;
+	dst_page->user = 0;
+	dst_page->frame = 0;
+	// invalidate the TLB buffer for this page
+	invalidate_page((u32*)0xFFFFF000);
+}
+
 /* function: invalidate_page
  * parameters:
  * 	ptr		- the logical address of the page
@@ -226,7 +256,8 @@ void invalidate_page(u32* ptr)
 {
 	// We also tell GCC that memory is invalidated. It prevents a
 	// "nasty bug" according to OSDEV.org
-	asm volatile( "invlpg %0" : : "m"(*ptr) : "memory" );	
+	asm volatile( "invlpg %0" : : "m"(*ptr) : "memory" );
+	asm volatile( "movl %%cr3,%%eax; movl %%eax,%%cr3" : : : "eax" );
 }
 
 /* function: switch_page_dir
@@ -271,6 +302,7 @@ void page_fault(struct regs* regs)
 	
 	printk("%2Vpage_fault: process %d caused a page fault at address 0x%x\n", current->t_pid, address);
 	printk("%2Vpage_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).\n", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
+	
 	/*
 	printk("%2VPAGE FAULT ( %s%s%s%s)\nAddress: 0x%x\n", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
 	printk("%2VError Code: 0x%X\n", regs->err);
@@ -342,6 +374,7 @@ int copy_page_table(page_dir_t* dstdir, page_dir_t* srcdir, int t)
 		memcpy(temp_buffer, temp_map_ptr, 0x1000);
 		temp_map_ptr = temporary_map(((u32)t<<22)|((u32)p<<12), dstdir);
 		memcpy(temp_map_ptr, temp_buffer, 0x1000);
+		temporary_unmap();
 		//copy_physical_frame((u32)(dst->frame << 12), (u32)(src->frame << 12));
 	}
 	// free the frame
@@ -384,7 +417,7 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 		if( !src->table[t] ){
 			dst->table[t] = NULL;
 			dst->tablePhys[t] = 0;
-		} else if( src->table[t] == kerndir->table[t] ){
+		} else if( kerndir->table[t] ){
 			dst->table[t] = src->table[t];
 			dst->tablePhys[t] = src->tablePhys[t];
 		} else {
@@ -442,4 +475,36 @@ void free_page_dir(page_dir_t* dir)
 	}
 	
 	kfree(dir);
+}
+
+void display_page_dir(page_dir_t* dir)
+{
+	u32 addr = 0;
+	//u32 prev = 0;
+	u32 start_addr = 0;
+	u32 start_frame = 0;
+	u32 length = 0;
+	
+	printk("Page Directory Mappings (dir=0x%X)\n", dir);
+	while( addr < 0xFFFFFFFF )
+	{
+		page_t* page = get_page((void*)addr, 0, dir);
+		if( page && page->present ){
+			if( page->frame == (start_frame+length) && length != 0 ){
+				length++;
+			} else if( length == 0 ){
+				start_addr = addr;
+				start_frame = page->frame;
+				length = 1;
+			} else {
+				printk("0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
+				start_addr = addr;
+				start_frame = page->frame;
+				length = 1;
+			}
+		}
+		if( addr == ((u32)(-0x1000)) ) break;
+		addr += 0x1000;
+	}
+	
 }

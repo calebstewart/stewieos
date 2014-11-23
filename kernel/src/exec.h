@@ -18,6 +18,7 @@ typedef struct _exec
 	char** argv;		// Argument List
 	char** envp;		// Environment List
 	void* entry;		// The Entry Address
+	void* bssend;		// end of process data (for sbrk)
 	void* private;		// Private loader data
 } exec_t;
 

@@ -17,38 +17,25 @@
 #include "pci.h"
 #include "block.h"
 #include <stdio.h>
-
+#include "serial.h"
+#include "ata.h"
+#include "ext2.h"
+#include <dirent.h>
 // testing spinlock
 #include "spinlock.h"
 
-tick_t my_timer_callback(tick_t, struct regs*);
-tick_t my_timer_callback(tick_t time, struct regs* regs)
-{
-	UNUSED(regs);
-	printk("timer_callback: time: %d+%d/1000\n", (time / 1000), time%1000);
-	return time+timer_get_freq();
-}
-
-// defined in initial_printk.c
-//void clear_screen(void);
-
-int global_var = 0;
-
-void multitasking_entry( multiboot_info_t* mb);
 int initfs_install(multiboot_info_t* mb);
 
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
 {	
+	mb = (multiboot_info_t*)( (u32)mb + KERNEL_VIRTUAL_BASE );
 	//clear_screen();
 	initialize_descriptor_tables();
 	asm volatile("sti");
 	init_timer(1000); // init the timer at 1000hz
-	printk("initializing paging... ");
-	unsigned int curpos = get_cursor_pos();
-	printk("\n");
+	printk("Initializing paging... \n");
 	init_paging(mb); // initialize the page tables and enable paging
-	printk_at(curpos, " done.\n");
 
 	char cpu_vendor[16] = {0};
 	u32 max_code = cpuid_string(CPUID_GETVENDORSTRING, cpu_vendor);
@@ -56,61 +43,28 @@ int kmain( multiboot_info_t* mb )
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
 	
 	
-	/*printk("Registering timer callback for the next second... ");
-	int result = timer_callback(timer_get_ticks()+timer_get_freq(), my_timer_callback);
-	printk("done (result=%d)\n", result);*/
-	
-	printk("Initializing virtual filesystem... ");
+	printk("Initializing virtual filesystem... \n");
 	initialize_filesystem();
-	printk("done.\n");
 	
+	printk("Enumerating PCI bus... \n");
 	pci_enumerate();
 	
-	printk("Initializing multitasking subsystem...\n");
+	printk("Initializing multitasking subsystem... \n");
 	task_init();
 	
-	printk("init: forking init task... ");
-	
-	pid_t pid = sys_fork();
-	
-	/* NOTE We should load something /bin/INIT here, not call another kernel function.
-	 * In the mean-time, we will simulate it by just calling a function, then exiting.
-	 * 
-	 * This should be changed as soon as I have enough user-land functionality.
-	 */
-	if( pid == 0 ){
-		multitasking_entry(mb);
-		// this should never happen
-		sys_exit(-1);
-	}
-	
-	while(1);
-	
-	return (int)0xdeadbeaf;
-}
-
-#include "ata.h"
-#include "ext2.h"
-#include <dirent.h>
-
-void multitasking_entry( multiboot_info_t* mb )
-{
-	printk("done.\n");
-	
+	printk("Registering elf32 executable type... \n");
 	elf_register();
 	
+	printk("Loading initfs tarball... \n");
 	initfs_install(mb);
 	
-	printk("INIT: loading module 'ide.o'\n");
-	//int error = sys_insmod("/ide.o");
+	printk("Loading IDE driver... \n");
 	int error = ide_load();
 	if( error != 0 ){
-		printk("INIT: unable to load module: %d\n", error);
-	} else {
-		printk("INIT: ide.o successfully loaded.\n");
+		printk("error: unable to load IDE driver!\n");
 	}
 	
-	printk("INIT: creating disk nodes...\n");
+	printk("Creating initfs disk nodes...\n");
 	dev_t devid;
 	for(int d = 0; d < 4; ++d)
 	{
@@ -126,96 +80,60 @@ void multitasking_entry( multiboot_info_t* mb )
 			}
 			error = sys_mknod(pathname, S_IFBLK, devid);
 			if( error != 0 ){
-				printk("INIT: %s: unable to create filesystem node: %d\n", pathname, error);
+				printk("%s: unable to create filesystem node: %d\n", pathname, error);
 			}
-			printk("INIT: created disk node %s for device 0x%02X\n", pathname, devid);
+			printk("created temporary disk node %s for device 0x%02X\n", pathname, devid);
 		}
 	}
 	
-	// Setup the ext2 filesystem driver
+	printk("Setting up Ext2 filesystem support... \n");
 	e2_setup();
 	
 	// Mount the Ext2 Filesystem from the root hard disk partition
-	printk("INIT: mounting /hda1 to /...\n");
+	printk("Mounting /hda1 to /...\n");
 	error = sys_mount("/hda1", "/", "ext2", 0/*MS_RDONLY*/, NULL);
 	if( error != 0 ){
-		printk("%2VINIT: error: unable to mount device. error code %d\n", error);
-		return;
-	}
-	
-	printk("INIT: successfully mounted /hda1 to /!\n");
-	
-	// Print a directory listing
-	printk("INIT: attempting to open /...\n");
-	int fd = sys_open("/", O_RDONLY, 0);
-	if( fd < 0 ){
-		printk("INIT: unable to open /. error code %d\n", fd);
+		printk("error: unable to mount device. error code %d\n", error);
 	} else {
-		printk("INIT: opened / successfully!\nDirectory Listing:\n%-6s\tFile Name\n", "Inode");
-		struct dirent dirent;
-		while( (error = sys_readdir(fd, &dirent, 1)) == 1 )
-		{
-			if( dirent.d_type == DT_BLOCK || dirent.d_type == DT_CHARACTER ){
-				printk("%-6d\t%14C%s\n", dirent.d_ino, dirent.d_name);
-			} else if( dirent.d_type == DT_DIRECTORY ){
-				printk("%-6d\t%9C%s\n", dirent.d_ino, dirent.d_name);
-			} else {
-				printk("%-6d\t%15C%s\n", dirent.d_ino, dirent.d_name);
-			}
-		}
-		if( error != 0 ){
-			printk("INIT: unable to read directory. error code %d\n", error);
-		}
-		sys_close(fd);
+		printk("Root filesystem mounted successfully.\n");
 	}
 	
-	printk("INIT: opening /test_file...\n");
-	fd = sys_open("/test_file", O_RDONLY, 0);
-	if( fd < 0 ){
-		printk("INIT: unable to open /test_file. error code %d\n", fd);
-		return;
-	}
+	printk("Starting serial interface...\n");
+	serial_init();
+	printk("Switching kernel logging to serial port 0...\n");
+	switch_printk_to_serial();
+	printk("Kernel switched to serial logging.\n");
 	
-	printk("INIT: test_file contents:\n");
-	char chr = 0;
-	while( sys_read(fd, &chr, 1) > 0 ){
-		printk("%c", chr);
-	}
-	
-	printk("\nINIT: closing /test_file...\n");
-	sys_close(fd);
-	
-	error = sys_insmod("/bin/screen.o");
+	printk("Loading user-mode VGA TTY driver...\n");
+	error = sys_insmod("/bin/vtty.o");
 	if( error != 0 ){
-		printk("INIT: unable to load module. error code %d\n", error);
+		printk("Unable to load module. error code %d\n", error);
 	}
 	
-	printk("INIT: Creating a node...\n");
-	int result = sys_mknod("/dev/node", S_IFCHR, makedev(0, 0));
-	
-	if( result == 0 ){
-		printk("INIT: Node /dev/node created!\n");
-	} else {
-		printk("INIT: unable to create node. error code %d\n", result);
+	int result = sys_mknod("/dev/vtty", S_IFCHR, makedev(0x02, 0));
+	if( result != 0 && result != (-EEXIST) ){
+		printk("error: /dev/vtty does not exist, and cannot be created!\n");
 	}
 	
-	printk("INIT: Forking INIT and Executing /bin/test...\n");
+	const char* INIT = "/bin/init";
+	printk("Loading INIT task (%s).\n", INIT);
+	
+	//printk("init: forking init task... ");
+	
 	pid_t pid = sys_fork();
 	if( pid < 0 )
 	{
-		printk("INIT: unable to fork process. error code %d\n", pid);
-		return;
-	} else if( pid != 0 ) {
-		printk("INIT: Entering infinite loop...\n", current->t_pid);
-		return;
+		printk("Unable to fork process. error code %d\n", pid);
 	} else if( pid == 0 ) {
-		char* argv[2] = {(char*)"/bin/test", NULL}, *envp[2] = {(char*)"PATH=/bin", NULL};
-		error = sys_execve("/bin/test", argv, envp);
-		printk("INIT: unable to execute /bin/test. error code %d\n", error);
+		char* argv[2] = {(char*)INIT, NULL}, *envp[2] = {(char*)"PATH=/bin", NULL};
+		error = sys_execve(INIT, argv, envp);
+		printk("INIT: unable to execute %s. error code %d\n", INIT, error);
 		printk("INIT: killing forked init task...\n");
 		sys_exit(-1);
 	}
 	
-	return;
+	enablei();
+	while(1);
 	
+	return (int)0xdeadbeaf;
 }

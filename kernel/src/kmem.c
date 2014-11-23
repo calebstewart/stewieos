@@ -202,7 +202,8 @@ static struct header* heap_find_hole(size_t size, int align)
 	list_for_each(item, list){
 		struct header* entry = list_entry(item, struct header, link);
 		if( entry->magic != STEWIEOS_HEAP_MAGIC ){
-			printk("%2Vheap_find_hole: bad magic number for heap header %p!\n\tsystem halted.", entry);
+			printk("%2Vheap_find_hole: bad magic number for heap header %p!\n", entry);
+			printk("%2V\tsystem halted.");
 			asm volatile ("cli;hlt");
 			return NULL;
 		}
@@ -401,7 +402,8 @@ void heap_kfree(void* data)
 	struct header* header = ((struct header*)( (char*)(data) - sizeof(struct header) ));
 	
 	if( header->magic != STEWIEOS_HEAP_MAGIC ){
-		printk("%2Vheap_kfree: corrupted heap header magic number!\nheap_kfree: aborting data deallocation (unstable pointer).\n");
+		printk("%2Vheap_kfree: corrupted heap header magic number!\n");
+		printk("%2Vheap_kfree: aborting data deallocation (unstable pointer).\n");
 		return;
 	}
 

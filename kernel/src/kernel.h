@@ -130,11 +130,17 @@ typedef unsigned int	uint;
 
 extern char initial_stack[];
 
-int printk(const char* format, ...);
-int printk_at(unsigned int pos, const char* format, ...);
-unsigned int get_cursor_pos( void );
+typedef void(*printk_putchar_func_t)(char c, int flags, int width, int precision);
+extern printk_putchar_func_t put_char;
 
-int initial_printk(const char* format, __builtin_va_list va);
+int printk(const char* format, ...);
+//int printk_at(unsigned int pos, const char* format, ...);
+//unsigned int get_cursor_pos( void );
+
+// switch printk to use the serial port (port number devid, 0-3)
+void switch_printk_to_serial( void );
+
+int internal_printk(const char* format, __builtin_va_list va);
 
 void outb(unsigned short port, unsigned char v);
 unsigned char inb(unsigned short port);
