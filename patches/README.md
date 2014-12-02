@@ -86,3 +86,12 @@ export PATH=$PATH:$HOME/opt/stewieos-cross/bin
 ```
 
 Every time you open a shell and want to use the cross compiler or you can add that command to the file ~/.bash_profile
+
+Creating Patches
+----------------
+
+To create new patches, simply run diff recursively on the two directories. For example, to create a patch for newlib, where ./newlib-2.1.0 is the modified version and ./original/newlib-2.1.0 is the original, simply run:
+
+```bash
+diff -ENwbur ./newlib-2.1.0/ ./original/newlib-2.1.0 > stewieos-newlib-2.1.0.patch
+```

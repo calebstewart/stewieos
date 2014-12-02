@@ -15,36 +15,36 @@ int main(int argc, char** argv)
 	
 	printf("INIT: started with pid %d.\n", getpid());
 	
-	// Open the modules configuration file
-	modfile = fopen("/etc/modules.conf", "r");
-	if( !modfile ){
-		printf("INIT: error: unable to open /etc/modules.conf: error code %d\n", errno);
-		return -1;
-	}
-	
-	// Attempt to load in all requested modules
-	while( !feof(modfile) )
-	{
-		if( fgets(module_line, 1024, modfile) == NULL ){
-			break;
-		}
-		
-		lineno++;
-		
-		if( module_line[0] == '#' || module_line[0] == 0 || module_line[0] == '\n' ){
-			continue;
-		}
-		
-		*strchr(module_line, '\n') = 0;
-		
-		printf("INIT: loading module \"%s\"...\n", module_line);
-		
-		result = insmod(module_line);
-		if( result < 0 ){
-			printf("INIT: modules.conf(%d): error: unable to load module, code %d.\n", lineno, errno);
-			errno = 0;
-		}
-	}
+// 	// Open the modules configuration file
+// 	modfile = fopen("/etc/modules.conf", "r");
+// 	if( !modfile ){
+// 		printf("INIT: error: unable to open /etc/modules.conf: error code %d\n", errno);
+// 		return -1;
+// 	}
+// 	
+// 	// Attempt to load in all requested modules
+// 	while( !feof(modfile) )
+// 	{
+// 		if( fgets(module_line, 1024, modfile) == NULL ){
+// 			break;
+// 		}
+// 		
+// 		lineno++;
+// 		
+// 		if( module_line[0] == '#' || module_line[0] == 0 || module_line[0] == '\n' ){
+// 			continue;
+// 		}
+// 		
+// 		*strchr(module_line, '\n') = 0;
+// 		
+// 		printf("INIT: loading module \"%s\"...\n", module_line);
+// 		
+// 		result = insmod(module_line);
+// 		if( result < 0 ){
+// 			printf("INIT: modules.conf(%d): error: unable to load module, code %d.\n", lineno, errno);
+// 			errno = 0;
+// 		}
+// 	}
 	
 	// Execute the shell
 	printf("INIT: executing default shell (%s)...\n", arguments[0]);

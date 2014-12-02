@@ -27,6 +27,7 @@ DECL_SYSCALL(syscall_waitpid);
 DECL_SYSCALL(syscall_readdir);
 DECL_SYSCALL(syscall_chdir);
 DECL_SYSCALL(syscall_getcwd);
+DECL_SYSCALL(syscall_mknod)
 
 syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXIT] = syscall_exit,
@@ -49,6 +50,7 @@ syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_READDIR] = syscall_readdir,
 	[SYSCALL_CHDIR] = syscall_chdir,
 	[SYSCALL_GETCWD] = syscall_getcwd,
+	[SYSCALL_MKNOD] = syscall_mknod,
 };
 
 void syscall_handler(struct regs* regs)
@@ -161,4 +163,9 @@ void syscall_chdir(struct regs* regs)
 void syscall_getcwd(struct regs* regs)
 {
 	regs->eax = (u32)sys_getcwd((char*)regs->ebx, (size_t)regs->ecx);
+}
+
+void syscall_mknod(struct regs* regs)
+{
+	regs->eax = (u32)sys_mknod((const char*)regs->ebx, (mode_t)regs->ecx, (dev_t)regs->edx);
 }

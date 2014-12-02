@@ -111,6 +111,12 @@ int sys_execve(const char* filename, char** argv, char** envp)
 		type = type->next;
 	}
 	
+	if( type == NULL ){
+		file_close(filp);
+		kfree(exec);
+		return -ENOEXEC;
+	}
+	
 	// Count the arguments
 	u32 argc = 0;
 	u32 argsz = 0;
@@ -291,6 +297,8 @@ int sys_insmod(const char* filename)
 			return error;
 		}
 	}
+	
+	debug_message("loaded %s at address 0x%x", filename, module->m_loadaddr);
 	
 	return 0;
 }

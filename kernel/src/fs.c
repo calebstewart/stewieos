@@ -675,9 +675,17 @@ int sys_mknod(const char* path, mode_t mode, dev_t dev)
 	UNUSED(path);
 	UNUSED(mode);
 	UNUSED(dev);
-	
+
+	struct path		exist_test;	
 	struct path		parent;
 	int			error;
+	
+	// Check if the name already exists
+	error = path_lookup(path, WP_DEFAULT, &exist_test);
+	if( error == 0 ){
+		path_put(&exist_test);
+		return -EEXIST;
+	}
 	
 	// Lookup the parent directory
 	error = path_lookup(path, WP_PARENT, &parent);
@@ -741,7 +749,7 @@ int sys_open(const char* filename, int flags, mode_t mode)
 		if( flags & O_CREAT )
 		{
 			// create a new regular file
-			result = sys_mknod(filename, (mode & S_IFMT) | S_IFREG, 0);
+			result = sys_mknod(filename, (mode & ~(S_IFMT)) | S_IFREG, 0);
 			//result = create_file(filename, (mode & S_IFMT) | S_IFREG, &path);
 			if( result != 0 ){
 				current->t_vfs.v_openvect[fd].flags = 0;
@@ -1175,7 +1183,7 @@ char* basename(const char* path)
 {
 	char* slash = NULL,
 		*tmp = NULL;
-	tmp = (char*)path;
+	tmp = (char*)path - 1;
 	while( tmp ){
 		slash = tmp;
 		tmp = strchr(slash+1, '/');

@@ -94,6 +94,9 @@ struct file* file_open(struct path* path, int flags)
 
 int file_close(struct file* file)
 {
+	if( !file ){
+		return 0;
+	}
 	if( --file->f_refs > 0 ){
 		return 0;
 	}

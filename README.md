@@ -10,7 +10,7 @@ Building
 
 StewieOS is built with a special cross-compiled toolchain. I use GCC-4.9.0, Binutils-2.24, and Newlib 2.1.0. Within the repository, there is folder called "patches" the README file under patches/ will tell you how to build the toolchain. StewieOS also expects a UNIX/Linux environment. It should work in Cygwin under windows, although it has not been tested.
 
-Once the toolchain is built, you can simply call `$ make` within the project root directory and all needed pieces will be compiled. You can then call `# make install`. The install target will not affect your system. It simply installs the kernel to the virtual hard disk "stewieos.vhd".
+Once the toolchain is built, you can simply call `$ make` within the project root directory and all needed pieces will be compiled. You can then call `# make install`. The install target will not affect your system. It simply installs the kernel to the virtual hard disk "stewieos.dd". This virtual disk needs to already exist, and can be created simply by running "stewieos_make_hdd.sh" under sudo. You need sudo because the script needs to setup a loopback device and partition/format the virtual disk. Once you have stewieos.dd, you can run make install.
 
 Running
 -------

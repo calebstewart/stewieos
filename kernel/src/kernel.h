@@ -9,6 +9,7 @@
 
 #define STEWIEOS_USER_BASE 0x80000000
 
+#define ATTR(...) __attribute__(__VA_ARGS__)
 #define UNUSED(var) do{ (void)var; } while(0)
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 

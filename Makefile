@@ -30,7 +30,7 @@ INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 FLASHDRIVE=/dev/sdb1
 
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd perpare_flashdrive cleanup_flashdrive flashdrive
-.PHONY: mount umount
+.PHONY: mount umount install_files
 
 # Exported variables for project makefiles
 export TOOLCHAIN_LOCATION:=$(HOME)/opt/stewieos-cross
@@ -50,7 +50,7 @@ all: $(ALLPROJECTS)
 
 clean: $(CLEANPROJECTS)
 
-install: prepare_vhd $(INSTALLPROJECTS) cleanup_vhd
+install: prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
 
 mount: prepare_vhd
 
@@ -66,7 +66,7 @@ cleanup_vhd:
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0
 	
-flashdrive: prepare_flashdrive $(INSTALLPROJECTS) cleanup_flashdrive
+flashdrive: prepare_flashdrive install_files $(INSTALLPROJECTS) cleanup_flashdrive
 	
 prepare_flashdrive:
 	mount $(FLASHDRIVE) /mnt
@@ -79,6 +79,9 @@ cleanup_flashdrive:
 fix_vhd:
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0
+
+install_files:
+	cp -R ./fs_root/* /mnt/
 
 $(ALLPROJECTS):
 	$(MAKE) -C $(@:all-%=%) all

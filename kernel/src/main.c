@@ -19,10 +19,12 @@
 #include <stdio.h>
 #include "serial.h"
 #include "ata.h"
-#include "ext2.h"
+//#include "ext2.h"
 #include <dirent.h>
 // testing spinlock
 #include "spinlock.h"
+#include "cmos.h"
+#include "ext2fs/ext2.h"
 
 int initfs_install(multiboot_info_t* mb);
 
@@ -86,8 +88,14 @@ int kmain( multiboot_info_t* mb )
 		}
 	}
 	
-	printk("Setting up Ext2 filesystem support... \n");
-	e2_setup();
+	printk("Loading Ext2 Filesystem Support...\n");
+	e2_install_filesystem();
+	//error = sys_insmod("/ext2fs.o");
+	if( error != 0 ){
+		printk("Unable to load module ext2fs.o. error code %d\n", error);
+	}
+	//printk("Setting up Ext2 filesystem support... \n");
+	//e2_setup();
 	
 	// Mount the Ext2 Filesystem from the root hard disk partition
 	printk("Mounting /hda1 to /...\n");
@@ -112,8 +120,10 @@ int kmain( multiboot_info_t* mb )
 	
 	int result = sys_mknod("/dev/vtty", S_IFCHR, makedev(0x02, 0));
 	if( result != 0 && result != (-EEXIST) ){
-		printk("error: /dev/vtty does not exist, and cannot be created!\n");
+		printk("Unable to create vtty node. error code %d\n", result);
 	}
+	
+	printk("Time is %u\n", rtc_read());
 	
 	const char* INIT = "/bin/init";
 	printk("Loading INIT task (%s).\n", INIT);

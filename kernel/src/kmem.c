@@ -150,7 +150,7 @@ static struct header* heap_align_block(struct header* header, size_t size, int a
 	header->size = (head_addr - (u32)header);
 	header->magic = STEWIEOS_HEAP_MAGIC;
 	// fix the unaligned block footer
-	new_foot = (struct footer*)( head_addr - sizeof(struct footer));
+	new_foot = (struct footer*)( (u32)header + header->size - sizeof(struct footer) );
 	new_foot->magic = STEWIEOS_HEAP_MAGIC;
 	new_foot->header = header;
 	
@@ -280,6 +280,11 @@ void* heap_kmalloc(size_t size, u32* phys, int align)
 		*phys = frame;
 	}
 	
+	if( (u32)header == 0xe000fab8 ){
+		//while(1);
+		debug_message("found the bitch.\n", 0);
+	}
+	
 	return (void*)( (char*)(header) + sizeof(struct header) );
 }
 
@@ -370,13 +375,13 @@ static struct header* heap_merge_prev(struct header* header)
 	// previous block is invalid, can't safely merge
 	if( prev_foot->magic != STEWIEOS_HEAP_MAGIC ){
 		printk("%2Vheap_merge_prev: corrupted heap footer magic number for footer %p.\n", prev_foot);
-		return NULL;
+		return header;
 	}
 	struct header* prev_head = prev_foot->header;
 	// previous block is invalid, can't safely merge
 	if( prev_head->magic != STEWIEOS_HEAP_MAGIC ){
 		printk("%2Vheap_merge_prev: corrupted heap header magic number for block %p.\n", prev_head);
-		return NULL;
+		return header;
 	}
 	
 	// previous block isn't a hole, we can't merge
@@ -401,12 +406,20 @@ void heap_kfree(void* data)
 {
 	struct header* header = ((struct header*)( (char*)(data) - sizeof(struct header) ));
 	
+	if( (u32)header == 0xe000fab8 ){
+		debug_message("found the bitch.",0);
+	}
+	
 	if( header->magic != STEWIEOS_HEAP_MAGIC ){
 		printk("%2Vheap_kfree: corrupted heap header magic number!\n");
 		printk("%2Vheap_kfree: aborting data deallocation (unstable pointer).\n");
 		return;
 	}
-
+	
+	struct footer* footer = (struct footer*)( (u32)header + header->size - sizeof(struct footer) );
+	footer->magic = STEWIEOS_HEAP_MAGIC;
+	footer->header = header;
+	
 	heap_merge_next(header);
 	header = heap_merge_prev(header);
 	

@@ -22,7 +22,7 @@ struct block_operations ide_block_operations = {
 };
 
 // Forward Declarations
-static inline void wait_one_milli( void );
+static inline void ata_wait( u8 channel );
 void ata_write_block(u8 channel, u8 reg, u8* buffer);
 
 static const char* ATA_DEVICE_TYPE_NAME[2] = { "ATA", "ATAPI" };
@@ -124,14 +124,18 @@ int ide_block_write(struct block_device* device, dev_t devid, off_t lba, size_t 
 	return ata_pio_transfer(ide_device[d].channel, ide_device[d].drive, ATA_PIO_WRITE, lba + ide_device[d].part[p].lba_start, (u8)count, (void*)buffer);
 }
 
-static inline void wait_one_milli( void )
+static inline void ata_wait( u8 channel )
 {
-	u32 eflags = enablei();
-	tick_t start = timer_get_ticks();
-	while( (timer_get_ticks() - start) == 0 ){
-		asm volatile ("hlt");
+	for(int i = 0; i < 4; ++i){
+		ata_read_reg(channel, ATA_REG_ALTSTATUS);
+		//inb(ide_channel[ATA_PRIMARY].ctrl);
 	}
-	restore(eflags);
+// 	u32 eflags = enablei();
+// 	tick_t start = timer_get_ticks();
+// 	while( (timer_get_ticks() - start) == 0 ){
+// 		asm volatile ("hlt");
+// 	}
+// 	restore(eflags);
 }
 
 int ata_check_partition(u8* partition)
@@ -298,7 +302,7 @@ int ide_initialize( void )
 void ata_select_drive(u8 channel, int drive)
 {
 	ata_write_reg(channel, ATA_REG_HDDEVSEL, (u8)(0xA0 | ((drive & 0x1) << 4)) );
-	wait_one_milli();
+	ata_wait(channel);
 }
 
 int ata_identify_device(u8 channel)
@@ -307,7 +311,7 @@ int ata_identify_device(u8 channel)
 	
 	// Send the ATA Identify Command
 	ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
-	wait_one_milli();
+	ata_wait(channel);
 	
 	// If status is zero, the device doesn't exist
 	status = ata_read_reg(channel, ATA_REG_STATUS);
@@ -325,7 +329,7 @@ int ata_identify_device(u8 channel)
 		if( (status & ATA_SR_ERR) ){  err = 1; break; }; // Device is not ATA
 		if( !(status & ATA_SR_BSY) && (status & ATA_SR_DRQ) ) break; // everything is fine
 		status = ata_read_reg(channel, ATA_REG_STATUS);
-		wait_one_milli();
+		ata_wait(channel);
 	} while ( 1 );
 	
 	// Check for ATAPI Type devices
@@ -342,7 +346,7 @@ int ata_identify_device(u8 channel)
 		}
 		
 		ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_IDENTIFY_PACKET);
-		wait_one_milli();
+		ata_wait(channel);
 	}
 	
 	// Read the identification space
@@ -445,7 +449,9 @@ void ata_disable_irq(u8 channel)
 
 int ata_error_handler(u8 channel, int drive, u8 status)
 {
-	printk("ide: read error on channel %d and drive %d: status: 0x%X\n", channel, drive, status);
+	u8 error = ata_read_reg(channel, ATA_REG_ERROR);
+	u8 altstatus = ata_read_reg(channel, ATA_REG_ALTSTATUS);
+	printk("ide: read error on channel %d and drive %d: status=0x%X, error=0x%X,\n\taltstatus=0x%X\n", channel, drive, status, error, altstatus);
 	return -ENXIO;
 }
 
@@ -469,7 +475,7 @@ int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void
 	device_register |= (u8)((drive & 0x1) << 4); // slave/master device
 	device_register |= (u8)(lba >> 27); // the last 4 bits of the LBA, according to the read sector(s) command
 	ata_write_reg(channel, ATA_REG_HDDEVSEL, device_register);
-	wait_one_milli();
+	ata_wait(channel);
 	
 	ata_write_reg(channel, ATA_REG_SECCOUNT0, count);
 	ata_write_reg(channel, ATA_REG_LBA0, (u8)(lba & 0xFF));
@@ -480,13 +486,14 @@ int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void
 	} else {
 		ata_write_reg(channel, ATA_REG_COMMAND, ATA_CMD_WRITE_SECTORS);
 	}
-	wait_one_milli();
+	ata_wait(channel);
 	
 	while( 1 )
 	{
 		// HPIOI1: Check_Status State (ATA v6 Spec. pg. 333)
 		while(1)
 		{
+			//ata_wait(channel);
 			status = ata_read_reg(channel, ATA_REG_STATUS);
 			// Transition HPIOI1:HIO
 			if( !(status & ATA_SR_BSY) && !(status & ATA_SR_DRQ) ){
