@@ -18,7 +18,7 @@
 # just add the directory name underwhich they reside
 # and make sure there is makefile within that has
 # all, clean and install targets.
-PROJECTS:=vtty ext2fs
+PROJECTS:=vtty
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)

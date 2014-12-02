@@ -27,9 +27,10 @@ ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 #FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
+DEVICE=/dev/null
 FLASHDRIVE=/dev/sdb1
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install prepare_vhd cleanup_vhd fix_vhd perpare_flashdrive cleanup_flashdrive flashdrive
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install_vhd prepare_vhd cleanup_vhd fix_vhd perpare_device cleanup_device install_device
 .PHONY: mount umount install_files
 
 # Exported variables for project makefiles
@@ -50,7 +51,7 @@ all: $(ALLPROJECTS)
 
 clean: $(CLEANPROJECTS)
 
-install: prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
+install_vhd: prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
 
 mount: prepare_vhd
 
@@ -66,12 +67,12 @@ cleanup_vhd:
 	kpartx -v -d /dev/loop0
 	losetup -d /dev/loop0
 	
-flashdrive: prepare_flashdrive install_files $(INSTALLPROJECTS) cleanup_flashdrive
+install_device: prepare_device install_files $(INSTALLPROJECTS) cleanup_device
 	
-prepare_flashdrive:
-	mount $(FLASHDRIVE) /mnt
+prepare_device:
+	mount $(DEVICE) /mnt
 
-cleanup_flashdrive:
+cleanup_device:
 	umount /mnt
 
 #Sometimes cleanup_vhd fails, so we need this to make the fix a little easier
