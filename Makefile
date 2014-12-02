@@ -31,7 +31,7 @@ DEVICE=/dev/null
 FLASHDRIVE=/dev/sdb1
 
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install_vhd prepare_vhd cleanup_vhd fix_vhd perpare_device cleanup_device install_device
-.PHONY: mount umount install_files
+.PHONY: mount umount install_files create_vhd
 
 # Exported variables for project makefiles
 export TOOLCHAIN_LOCATION:=$(HOME)/opt/stewieos-cross
@@ -51,11 +51,14 @@ all: $(ALLPROJECTS)
 
 clean: $(CLEANPROJECTS)
 
-install_vhd: prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
+install_vhd: stewieos.dd prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
 
 mount: prepare_vhd
 
 umount: cleanup_vhd
+
+stewieos.dd: 
+	./stewieos_make_hdd.sh
 
 prepare_vhd:
 	losetup /dev/loop0 $(STEWIEOS_IMAGE)
