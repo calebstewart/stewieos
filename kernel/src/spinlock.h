@@ -25,5 +25,8 @@ typedef int spinlock_t;
 // lock and unlock a spinlock
 void spin_lock(spinlock_t* spinlock);
 void spin_unlock(spinlock_t* spinlock);
+// attempts to lock the spinlock, but if it can't it doesn't spin.
+// instead it will return 1 if it aquired the lock or 0 if it didn't
+int spin_try_lock(spinlock_t* spinlock);
 
 #endif

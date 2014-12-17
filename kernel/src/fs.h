@@ -19,10 +19,16 @@
 // The file descriptor is invalid at the moment,
 // but is still occupied (if FD_OCCUPIED)
 #define FD_INVALID		(1<<17)
+// specifies that this file description refers to a pipe
+#define FD_RDPIPE		(1<<18)
+#define FD_WRPIPE		(1<<19)
 
 #define FS_MAX_OPEN_FILES TASK_MAX_OPEN_FILES
 
+#define FD_VALID_RANGE(fd)	( (fd) >= 0  && (fd) < FS_MAX_OPEN_FILES )
 #define FD_VALID(fd) ( (fd) >= 0 && (fd) < FS_MAX_OPEN_FILES && (current->t_vfs.v_openvect[(fd)].flags & FD_OCCUPIED) && !(current->t_vfs.v_openvect[(fd)].flags & FD_INVALID) )
+#define FD_ISPIPE(fd)		(current->t_vfs.v_openvect[(fd)].flags & (FD_RDPIPE | FD_WRPIPE))
+//#define FD_ISPIPE(fd)		(0)
 
 // walk_path flags
 #define WP_DEFAULT		0x00000000
@@ -64,6 +70,7 @@ struct inode_operations
 	int(*chmod)(struct inode*, mode_t);
 	int(*chown)(struct inode*, uid_t, gid_t);
 	int(*truncate)(struct inode*);
+	int(*flush)(struct inode* inode);
 };
 
 /* type: struct file_operations
@@ -349,6 +356,7 @@ int file_ioctl(struct file* file, int request, char* argp);
 int file_stat(struct file* file, struct stat* buf);
 int file_readdir(struct file* file, struct dirent* dirent, size_t count);
 int file_isatty(struct file* file);
+int file_flush(struct file* file);
 
 /* Unix System Call Definitions
  * 
@@ -378,6 +386,11 @@ int sys_readdir(int fd, struct dirent* dirent, size_t count);
 int sys_isatty(int fd);
 int sys_chdir(const char* path);
 int sys_getcwd(char* buf, size_t count);
+int sys_pipe(int* pipefd);
+//int sys_dup(int newfd, int oldfd, int flags);
+
+int sys_resfd( void );
+void sys_relfd( int fd );
 
 void copy_task_vfs(struct vfs* dest, struct vfs* src);
 void init_task_vfs(struct vfs* vfs);

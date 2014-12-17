@@ -1,6 +1,10 @@
 #include "kernel.h"
 #include "timer.h"
 #include "serial.h"
+#include "fs.h"
+#include "error.h"
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define CURSOR_INDEX(monitor) (( (monitor).cx + (monitor).cy*(monitor).width )*2)
 
@@ -55,6 +59,7 @@ void set_cursor_pos(unsigned int pos);
 
 // The initial put character function simply outputs to the VGA text-mode console (later it will use the serial ports)
 printk_putchar_func_t put_char = initial_vga_put_char;
+printk_putstr_func_t custom_put_str = NULL;
 
 void switch_printk_to_serial( void )
 {
@@ -152,11 +157,21 @@ static int put_str(const char* s, int flags, int width, int precision)
 		count = 0;
 	}
 	
-	while(*s && precision)
-	{
-		put_char(*s, 0, 0, 0);
-		s++; precision--;
-		count++;
+	if( custom_put_str != NULL ){
+		if( precision < (int)strlen(s) ){
+			custom_put_str(s, precision);
+			count += precision;
+		} else {
+			custom_put_str(s, strlen(s));
+			count += strlen(s);
+		}
+	} else {
+		while(*s && precision)
+		{
+			put_char(*s, 0, 0, 0);
+			s++; precision--;
+			count++;
+		}
 	}
 	
 	if( flags & P_LEFT && width != 0 ){

@@ -114,7 +114,7 @@ int e2_super_flush(struct superblock* sb)
 	// Calculate block group table location
 	size_t bgloc = (sb->s_blocksize == 1024) ? 2 : 1;
 	
-	block_write(sb->s_dev, bgloc, bgsize, (void*)e2sup->bgtable);
+	block_write(sb->s_dev, bgloc*sb->s_blocksize, bgsize, (void*)e2sup->bgtable);
 	
 	// Write the block group table back to disk
 	//e2_write_block(sb, bgloc, bgsize, (void*)e2sup->bgtable);

@@ -1,6 +1,7 @@
 #include "kernel.h"
 #include "timer.h"
 #include "descriptor_tables.h"
+#include "cmos.h"
 
 struct callback_info;
 struct callback_info
@@ -12,6 +13,8 @@ struct callback_info
 
 static unsigned int timer_freq = 0;						// The current timer frequency
 static tick_t current_tick = 0;							// The current time (tick count since init)
+static time_t current_time = 0;							// The current time (seconds since epoch)
+static tick_t last_sync = 0;							// time of the last sync
 static struct callback_info callbacks[TIMER_MAX_CALLBACKS];			// The list of callback structures to be inserted (empty=>when==TIMER_CANCEL)
 static struct callback_info* next_callback = (struct callback_info*)0;		// The next callbacks info structure
 
@@ -21,6 +24,12 @@ void timer_interrupt(struct regs*);
 void timer_interrupt(struct regs* regs)
 {
 	current_tick++;
+	if( (current_tick % timer_freq) == 0 ){
+		current_time++;
+		if( (current_time-last_sync) > 60 ){
+			timer_sync_time();
+		}
+	}
 	// Check for the firing of the next callback ( use while in case some callbacks have the same time)
 	while( next_callback && next_callback->when <= current_tick )
 	{
@@ -79,7 +88,7 @@ void init_timer(unsigned int freq)
 	
 	u32 divisor = ((u32)(1193180 / freq));
 	
-	asm volatile("cli");
+	u32 eflags = disablei();
 	
 	// PIT command byte
 	outb(0x43, 0x36); // 0b00110110
@@ -90,7 +99,9 @@ void init_timer(unsigned int freq)
 	outb(0x40, low);
 	outb(0x40, high);
 	
-	asm volatile("sti");
+	restore(eflags);
+	
+	timer_sync_time();
 	
 	printk(" done.\n");
 }
@@ -101,6 +112,16 @@ unsigned int timer_get_freq( void )
 tick_t timer_get_ticks( void )
 {
 	return current_tick;
+}
+
+time_t timer_get_time( void )
+{
+	return current_time;
+}
+
+void timer_sync_time( void )
+{
+	current_time = rtc_read();
 }
 
 int timer_callback(tick_t when, timer_callback_t callback)

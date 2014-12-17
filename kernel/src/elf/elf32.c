@@ -202,7 +202,7 @@ module_t* elf_load_module(struct file* file)
 	
 	// There must be a module info section
 	if( !module_shdr ){
-		printk("No module info section!\n");
+		syslog(KERN_WARN, "%s: No module info section!", file->f_path.p_dentry->d_name);
 		kfree(shstrtab);
 		kfree(shtab);
 		return ERR_PTR(-EINVAL);
@@ -344,14 +344,14 @@ int elf_resolve(struct file* file, Elf32_Ehdr* ehdr __attribute__((unused)), Elf
 				return 0;
 			}
 		}
-		printk("elf_resolve: %s: unresolved symbol %s\n", file_dentry(file)->d_name, &strtab[symbol->st_name]);
+		syslog(KERN_ERR, "elf_resolve: %s: unresolved symbol %s\n", file_dentry(file)->d_name, &strtab[symbol->st_name]);
 		return -EINVAL;
 	}
 	
 	// Common symbol
 	if( symbol->st_shndx == SHN_COMMON )
 	{
-		printk("elf_resolve: %s: common symbols are unsupported in modules!\n", file_dentry(file)->d_name);
+		syslog(KERN_ERR, "elf_resolve: %s: common symbols are unsupported in modules!\n", file_dentry(file)->d_name);
 		return -EINVAL;
 	}
 	
@@ -405,7 +405,7 @@ int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab __attrib
 			*P = S;
 			break;
 		default:
-			printk("elf_relocate: unsupported/invalid relocation type: 0x%X\n", ELF32_R_TYPE(rel->r_info));
+			syslog(KERN_ERR, "elf_relocate: unsupported/invalid relocation type: 0x%X\n", ELF32_R_TYPE(rel->r_info));
 			return -EINVAL;
 	}
 	

@@ -23,6 +23,7 @@ $(PROJECT_NAME): $(OUTPUT_FILE)
 
 install:
 	strip -S -o $(MODULE_INSTALL_DIR)/$(PROJECT_NAME).o $(OUTPUT_FILE)
+	chmod +x $(MODULE_INSTALL_DIR)/$(PROJECT_NAME).o
 
 clean:
 	rm -f $(OBJFILES) $(OUTPUT_FILE)

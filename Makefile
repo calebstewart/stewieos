@@ -26,12 +26,10 @@ PROJECTS:=kernel modules user
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
-#FLASHDRIVE:=/dev/disk/by-uuid/40d036a6-adf3-432a-adfe-13e866269ec2
 DEVICE=/dev/null
-FLASHDRIVE=/dev/sdb1
 
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install_vhd prepare_vhd cleanup_vhd fix_vhd perpare_device cleanup_device install_device
-.PHONY: mount umount install_files create_vhd
+.PHONY: mount umount install_files create_vhd fsck do_fsck
 
 # Exported variables for project makefiles
 export TOOLCHAIN_LOCATION:=$(HOME)/opt/stewieos-cross
@@ -56,6 +54,12 @@ install_vhd: stewieos.dd prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vh
 mount: prepare_vhd
 
 umount: cleanup_vhd
+
+fsck: prepare_vhd do_fsck fix_vhd
+
+do_fsck:
+	umount /mnt
+	-e2fsck -f /dev/mapper/loop0p1
 
 stewieos.dd: 
 	./stewieos_make_hdd.sh

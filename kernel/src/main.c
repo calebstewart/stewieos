@@ -25,12 +25,14 @@
 #include "spinlock.h"
 #include "cmos.h"
 #include "ext2fs/ext2.h"
+#include "syslog.h"
 
 int initfs_install(multiboot_info_t* mb);
 
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
 {	
+	int result = 0;
 	mb = (multiboot_info_t*)( (u32)mb + KERNEL_VIRTUAL_BASE );
 	//clear_screen();
 	initialize_descriptor_tables();
@@ -106,44 +108,44 @@ int kmain( multiboot_info_t* mb )
 		printk("Root filesystem mounted successfully.\n");
 	}
 	
-	printk("Starting serial interface...\n");
-	serial_init();
-	printk("Switching kernel logging to serial port 0...\n");
+	// switch printk to serial in case something calls it for some reason...
+	syslog(KERN_NOTIFY, "Switching printk to serial output just in case...");
 	switch_printk_to_serial();
-	printk("Kernel switched to serial logging.\n");
 	
-	printk("Loading user-mode VGA TTY driver...\n");
+	syslog(KERN_NOTIFY, "Loading user-mode VGA TTY driver...");
 	error = sys_insmod("/bin/vtty.o");
 	if( error != 0 ){
-		printk("Unable to load module. error code %d\n", error);
+		syslog(KERN_WARN, "Unable to load module. error code %d", error);
 	}
 	
-	int result = sys_mknod("/dev/vtty", S_IFCHR, makedev(0x02, 0));
+	result = sys_mknod("/dev/vtty", S_IFCHR, makedev(0x02, 0));
 	if( result != 0 && result != (-EEXIST) ){
-		printk("Unable to create vtty node. error code %d\n", result);
+		syslog(KERN_WARN, "Unable to create vtty node. error code %d", result);
 	}
 	
-	printk("Time is %u\n", rtc_read());
+	result = begin_syslog_daemon("/var/log/syslog");
+	if( result < 0 ){
+		printk("error: unable to initialize kernel system log.\n");
+	}
 	
 	const char* INIT = "/bin/init";
-	printk("Loading INIT task (%s).\n", INIT);
-	
-	//printk("init: forking init task... ");
+	syslog(KERN_NOTIFY, "Loading INIT task (%s).", INIT);
 	
 	pid_t pid = sys_fork();
-	if( pid < 0 )
-	{
-		printk("Unable to fork process. error code %d\n", pid);
+	if( pid < 0 ) {
+		syslog(KERN_ERR, "Unable to fork process. error code %d", pid);
 	} else if( pid == 0 ) {
 		char* argv[2] = {(char*)INIT, NULL}, *envp[2] = {(char*)"PATH=/bin", NULL};
 		error = sys_execve(INIT, argv, envp);
-		printk("INIT: unable to execute %s. error code %d\n", INIT, error);
-		printk("INIT: killing forked init task...\n");
+		syslog(KERN_NOTIFY, "INIT: unable to execute %s. error code %d", INIT, error);
+		syslog(KERN_NOTIFY, "INIT: killing forked init task...");
 		sys_exit(-1);
 	}
 	
 	enablei();
-	while(1);
+	while(1){
+		asm volatile("hlt");
+	}
 	
 	return (int)0xdeadbeaf;
 }

@@ -90,7 +90,7 @@ void mnt_put(struct mount* mount)
 {
 	if( !mount ) return;
 	if( mount->m_refs == 0 ){
-		printk("%1V\nmnt_put: warning: mount reference count is going negative...\n");
+		syslog(KERN_WARN, "mnt_put: mount reference count is going negative...\n");
 	}
 	mount->m_refs--;
 }
@@ -243,7 +243,7 @@ int path_lookup(const char* name, int flags, struct path* path)
 	int			error = 0;
 	
 	if( name == NULL ){
-		return -EEXIST;
+		return -ENOENT;
 	}
 	
 	if( strlen(name) > 511 ){
@@ -380,6 +380,49 @@ int path_get_parent(struct path* path)
 		return 0;
 	}
 }
+
+/* function: sys_dup
+ * parameters:
+ * 		newfd: the new file descriptor (or -1 to find an empty one)
+ * 		oldfd: file descriptor to copy
+ * 		flags: O_CLOEXEC flag if needed in new file descriptor
+ * return value:
+ * 		On success, this function returns the new descriptor.
+ * 		On error, a negative error value is returned.
+ */
+// int sys_dup(int newfd, int oldfd, int flags)
+// {
+// 	if( !FD_VALID(oldfd) ){
+// 		return -EBADF;
+// 	}
+// 	if( newfd == -1 )
+// 	{
+// 		for(newfd = 0; newfd < FS_MAX_OPEN_FILES; ++newfd){
+// 			if( FD_INVALID(newfd) ){
+// 				current->t_vfs.v_openvect[newfd].flags |= FD_OCCUPIED | FD_INVALID;
+// 				break;
+// 			}
+// 		}
+// 		if( newfd == FS_MAX_OPEN_FILES ){
+// 			return -EMFILE;
+// 		}
+// 	} else {
+// 		// outside the range, but not the special -1 value
+// 		if( !FD_VALID_RANGE(newfd) ){
+// 			return -EBADF;
+// 		}
+// 	}
+// 	if( oldfd == newfd ){
+// 		return -EINVAL;
+// 	}
+// 	
+// 	if( flags != 0 && flags != O_CLOEXEC ){
+// 		return -EINVAL;
+// 	}
+// 	
+// 	
+// 	return newfd;
+// }
 
 /*
  * function: sys_mount
@@ -721,7 +764,24 @@ int inode_trunc(struct inode* inode)
 		return -EACCES;
 	}
 	
-	return -inode->i_ops->truncate(inode);
+	return inode->i_ops->truncate(inode);
+}
+
+int sys_resfd( void )
+{
+	for(int i = 0; i < TASK_MAX_OPEN_FILES; i++){
+		if( !(current->t_vfs.v_openvect[i].flags & FD_OCCUPIED) ){
+			// Reserve the file descriptor
+			current->t_vfs.v_openvect[i].flags = FD_OCCUPIED | FD_INVALID;
+			return i;
+		}
+	}
+	return -1;
+}
+
+void sys_relfd( int fd )
+{
+	current->t_vfs.v_openvect[fd].flags = 0;
 }
 
 int sys_open(const char* filename, int flags, mode_t mode)
@@ -808,7 +868,7 @@ int sys_close(int fd)
 	if( error != 0 ){
 		return error;
 	}
-	
+		
 	current->t_vfs.v_openvect[fd].file = NULL;
 	current->t_vfs.v_openvect[fd].flags = 0;
 	
@@ -988,6 +1048,7 @@ int sys_fstat(int fd, struct stat* st)
 	if( !FD_VALID(fd) ){
 		return -EBADF;
 	}
+	
 	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
 	return file_stat(file, st);
@@ -1017,10 +1078,13 @@ int path_access(struct path* path, int mode)
 		return -EINVAL;
 	}
 	
-	// ROOT IS GOD :D
-	if( current->t_uid == 0 ) return 0;
 	// The file obviously exists... we already parsed the path...
 	if( mode == F_OK ) return 0;
+	
+	// Why this happens, no one knows...
+	if( path->p_dentry == vfs_root && path->p_mount == NULL ){
+		return 0;
+	}
 	
 	struct inode* inode = path->p_dentry->d_inode;
 	
@@ -1028,7 +1092,7 @@ int path_access(struct path* path, int mode)
 	if( current->t_uid == 0 )
 	{
 		// Even root can't write to a Read Only mounted filesystem...
-		if( path->p_mount->m_flags & MS_RDONLY && (mode & W_OK) ){
+		if( (path->p_mount) && (path->p_mount->m_flags & MS_RDONLY) && (mode & W_OK) ){
 			return -EROFS;
 		}
 		
@@ -1042,7 +1106,7 @@ int path_access(struct path* path, int mode)
 	}
 	if( mode & W_OK )
 	{
-		if( path->p_mount->m_flags & MS_RDONLY ){
+		if( (path->p_mount) && path->p_mount->m_flags & MS_RDONLY ){
 			return -EACCES;
 		}
 		// Check the appropriate write bit
@@ -1072,7 +1136,7 @@ int path_access(struct path* path, int mode)
 	}
 	if( mode & X_OK )
 	{
-		if( path->p_mount->m_flags & MS_NOEXEC ){
+		if( (path->p_mount) && (path->p_mount->m_flags & MS_NOEXEC) ){
 			return -EACCES;
 		}
 		if( current->t_uid == inode->i_uid ){
@@ -1237,13 +1301,22 @@ int sys_chdir(const char* name)
 }
 
 // recursive function to build the path string of a dentry
-int _build_path(int first __attribute__((unused)), char** buf, char* end, struct dentry *dentry);
-int _build_path(int first __attribute__((unused)), char** buf, char* end, struct dentry *dentry)
+int _build_path(int dotdot __attribute__((unused)), char** buf, char* end, struct dentry *dentry);
+int _build_path(int dotdot __attribute__((unused)), char** buf, char* end, struct dentry *dentry)
 {
 	if( dentry->d_parent ){
-		int result = _build_path(0, buf, end, dentry->d_parent);
+		int result;
+		if( strcmp(dentry->d_name, "..") == 0 ){
+			result = _build_path(1, buf, end, dentry->d_parent);
+		} else {
+			result = _build_path(0, buf, end, dentry->d_parent);
+		}
 		if( result < 0 ){
 			return result;
+		}
+		// don't print the "."
+		if( strcmp(dentry->d_name, ".") == 0 || dotdot == 1 || strcmp(dentry->d_name,"..") == 0 ){
+			return 0;
 		}
 	}
 	// Is there room for this name?
@@ -1270,7 +1343,7 @@ int sys_getcwd(char* buf, size_t len)
 {
 	struct dentry* dentry = current->t_vfs.v_cwd.p_dentry;
 	
-	int result = _build_path(1, &buf, &buf[len-2], dentry);
+	int result = _build_path(0, &buf, &buf[len-2], dentry);
 	if( result == 0 ){
 		*buf = 0;
 	}
@@ -1303,7 +1376,7 @@ struct superblock* super_get(struct superblock* super)
 void super_put(struct superblock* super)
 {
 	if( super->s_refs == 0 ){
-		printk("%1Vsuper_put: warning: superblock reference count going negative.\n");
+		syslog(KERN_WARN, "super_put: superblock reference count going negative.\n");
 	}
 	super->s_refs--;
 }

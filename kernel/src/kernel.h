@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <string.h>
 #include "gcc-builtin.h"
+#include <stdarg.h>
+#include "syslog.h"
 
 #define MAXNAMELEN		256			/* the maximum length of a name string in the file system */
 
@@ -33,12 +35,12 @@
 #define CPUID_VENDOR_RISE         "RiseRiseRise"
 
 #ifdef KERNEL_DEBUGGING
-#	define debug_message(fmt, ...) printk("%1V%s:%d:%s: "  fmt "\n", __FILE__, __LINE__, __func__, __VA_ARGS__)
+#	define debug_message(fmt, ...) syslog(KERN_WARN, "%s:%d:%s: "  fmt, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #else
 #	define debug_message(fmt, ...)
 #endif
 
-#define info_message(fmt, ...) printk("%1V%s: " fmt "\n", MODULE_NAME, __VA_ARGS__)
+#define info_message(fmt, ...) syslog(KERN_NOTIFY, "%s: " fmt, MODULE_NAME, __VA_ARGS__)
 
 /* enum cpuid_requests
  * purpose:
@@ -131,12 +133,16 @@ typedef unsigned int	uint;
 
 extern char initial_stack[];
 
+typedef void(*printk_putstr_func_t)(const char* s, size_t count);
 typedef void(*printk_putchar_func_t)(char c, int flags, int width, int precision);
 extern printk_putchar_func_t put_char;
 
 int printk(const char* format, ...);
 //int printk_at(unsigned int pos, const char* format, ...);
 //unsigned int get_cursor_pos( void );
+
+// defined in ee_sprintf.c
+int ee_vsprintf(char *buf, const char *fmt, va_list args);
 
 // switch printk to use the serial port (port number devid, 0-3)
 void switch_printk_to_serial( void );
@@ -161,6 +167,10 @@ u32 disablei( void );
 void restore(u32 eflags);
 
 u32 read_eip( void );
+
+typedef void(*shutdown_handler_t)(void);
+int sys_shutdown( void );
+void register_shutdown_handler(shutdown_handler_t handler);
 
 #include "gcc-builtin.h"
 

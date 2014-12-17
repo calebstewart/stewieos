@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "block.h"
+#include "pipe.h"
 
 struct file* file_open(struct path* path, int flags)
 {
@@ -56,7 +57,10 @@ struct file* file_open(struct path* path, int flags)
 		if( !(access_mode & W_OK) ){
 			return ERR_PTR(-EACCES);
 		} else {
-			inode_trunc(path->p_dentry->d_inode);
+			result = inode_trunc(path->p_dentry->d_inode);
+			if( result != 0 ){
+				return ERR_PTR(result);
+			}
 		}
 	}
 	
@@ -74,6 +78,8 @@ struct file* file_open(struct path* path, int flags)
 		file->f_ops = &block_device_fops;
 	} else if( S_ISCHR(path->p_dentry->d_inode->i_mode) ){
 		file->f_ops = get_chrdev_fops(major(path->p_dentry->d_inode->i_dev));
+	} else if( S_ISFIFO(path->p_dentry->d_inode->i_mode) ){
+		file->f_ops = &pipe_operations;
 	} else {
 		file->f_ops = path->p_dentry->d_inode->i_default_fops;
 	}
@@ -90,6 +96,17 @@ struct file* file_open(struct path* path, int flags)
 	file->f_status = flags;
 	
 	return file;
+}
+
+int file_flush(struct file* file)
+{
+	struct inode* inode = file_inode(file);
+	
+	if( inode->i_ops->flush ){
+		return inode->i_ops->flush(inode);
+	}
+	
+	return 0;
 }
 
 int file_close(struct file* file)

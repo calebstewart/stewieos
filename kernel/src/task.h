@@ -94,11 +94,15 @@ void task_kill(struct task* task);
 // lookup a task based on process id
 struct task* task_lookup(pid_t pid);
 
+void task_wait(struct task* task, int wait_flag);
 void task_waitio(struct task* task);
 void task_wakeup(struct task* task);
 
 pid_t task_getfg( void );
 void task_setfg(pid_t pid);
+
+// detach a task from its parent and relinquish foregroundness, if needed, to the parent
+void task_detach(pid_t pid);
 
 caddr_t sys_sbrk(int incr);
 pid_t sys_getpid( void );

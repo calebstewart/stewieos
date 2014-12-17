@@ -141,9 +141,12 @@ void task_preempt(struct regs* regs)
 	u32 ebp;					// the old base pointer
 	u32 eip;					// the old instruction pointer
 	
+	u32 eflags = disablei();
+	
 	// There are no more tasks!
 	if( !current || list_is_lonely(&current->t_queue, &ready_tasks) )
 	{
+		restore(eflags);
 		return;
 	}
 	
@@ -151,6 +154,7 @@ void task_preempt(struct regs* regs)
 	if( current->t_ticks_left != 0 && (current->t_flags & TF_RUNNING) && !(current->t_flags & TF_RESCHED))
 	{
 		current->t_ticks_left--;
+		restore(eflags);
 		return;
 	}
 	
@@ -170,10 +174,11 @@ void task_preempt(struct regs* regs)
 			memcpy(regs, &current->t_regs, sizeof(*regs));
 			current->t_flags &= ~TF_EXECVE;
 		}
+		restore(eflags);
 		return;
 	}
 	
-	current->t_eflags = disablei(); // interrupts are already disabled, so this just returns the current eflags
+	current->t_eflags = eflags; // interrupts are already disabled, so this just returns the current eflags
 	current->t_eip = eip;
 	current->t_esp = esp;
 	current->t_ebp = ebp;
@@ -257,7 +262,7 @@ void task_kill(struct task* dead)
 	
 	if( dead->t_pid == 0 )
 	{
-		debug_message("warning: attempted to kill init task!", 0);
+		//debug_message("warning: attempted to kill init task!", 0);
 		
 		// We need to return the init task to a stable running state
 		dead->t_flags = TF_RUNNING;
@@ -335,27 +340,74 @@ struct task* task_lookup(pid_t pid)
 	return NULL;
 }
 
-void task_waitio(struct task* task)
+void task_wait(struct task* task, int wait_flag)
 {
+	if( (wait_flag & TF_WAITMASK) == 0 ) return;
+	
 	u32 eflags = disablei();
 	
-	// Set the wait io flag, and reschedule the task
 	list_rem(&task->t_queue);
-	task->t_flags |= (TF_WAITIO | TF_RESCHED);
-	schedule();
+	task->t_flags |= (wait_flag | TF_RESCHED);
 	
 	restore(eflags);
+	
+	schedule();
+}
+
+void task_detach(pid_t pid)
+{
+	struct task* task = task_lookup(pid);
+	if( task == NULL ){
+		return;
+	}
+	
+	if( task_getfg() == pid ){
+		if( task->t_parent ){
+			task_setfg(task->t_parent->t_pid);
+		} else {
+			task_setfg(0);
+			return;
+		}
+	}
+	
+	u32 eflags = disablei();
+	
+	list_rem(&task->t_sibling);
+	task->t_parent = NULL;
+	
+	restore(eflags);
+	
+}
+
+void task_waitio(struct task* task)
+{
+	task_wait(task, TF_WAITIO);
+	return;
+// 	u32 eflags = disablei();
+// 	
+// 	// Set the wait io flag, and reschedule the task
+// 	list_rem(&task->t_queue);
+// 	task->t_flags |= (TF_WAITIO | TF_RESCHED);
+// 	schedule();
+// 	
+// 	restore(eflags);
 }
 
 void task_wakeup(struct task* task)
 {
-	u32 eflags = disablei();
+	//u32 eflags = disablei();
+	
+	// task is already awake
+	if( (task->t_flags & TF_WAITMASK) == 0 ){
+		//restore(eflags);
+		return;
+	}
 	
 	list_add(&task->t_queue, &ready_tasks);
 	task->t_flags &= ~(TF_WAITMASK | TF_RESCHED);
 	task->t_flags |= TF_RUNNING;
 	
-	restore(eflags);
+	//restore(eflags);
 }
 
 /* function: sys_sbrk
@@ -426,7 +478,6 @@ int sys_fork( void )
 	task->t_dir = copy_page_dir(current->t_dir);
 	
 	if( !task->t_dir ){
-		printk("%2Vsys_fork: unable to copy page directory!\n");
 		kfree(task);
 		restore(eflags);
 		return -1;
@@ -437,6 +488,7 @@ int sys_fork( void )
 	
 	// we have already switched, so we must be the child (we just travelled back in time o.O)
 	if( eip == 0xDEADCABB ){
+		restore(eflags);
 		return 0;
 	}
 	// this means we are the parent, and we need to setup the child
@@ -497,9 +549,9 @@ void sys_exit( int result )
 		task_setfg(0);
 	}
 	
-	schedule();
-	
 	restore(eflags);
+	
+	schedule();
 	
 	while(1);
 	

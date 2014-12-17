@@ -48,9 +48,9 @@ int ide_load( void )
 	
 	int major = register_block_device(0x00, 0xff, &ide_block_operations);
 	if( major < 0 ){
-		printk("ide: error: unable to register block device: error %d\n", major);
+		syslog(KERN_ERR, "ide: unable to register block device: error %d\n", major);
 	} else {
-		printk("ide: registered block device under major number %d.\n", major);
+		syslog(KERN_NOTIFY, "ide: registered block device under major number %d.\n", major);
 	}
 	
 	return 0;
@@ -160,7 +160,7 @@ int ide_initialize( void )
 	
 	// Search for ide device class
 	if( pci_search(ide_class, &device, 1) == NULL ){
-		printk("ide: no ide controller found on PCI bus!\n");
+		syslog(KERN_WARN, "ide: no ide controller found on PCI bus!\n");
 		return -ENXIO;
 	}
 	
@@ -323,7 +323,7 @@ int ata_identify_device(u8 channel)
 	// the first read of status has already occured above and was non-zero
 	do{
 		if( (timer_get_ticks() - start) > (5000) ){
-			printk("ide: warning: command timeout on channel %d!\n", channel);
+			syslog(KERN_WARN, "ide: command timeout on channel %d!\n", channel);
 			return -1;
 		}
 		if( (status & ATA_SR_ERR) ){  err = 1; break; }; // Device is not ATA
@@ -447,11 +447,11 @@ void ata_disable_irq(u8 channel)
 	UNUSED(channel);
 }
 
-int ata_error_handler(u8 channel, int drive, u8 status)
+int ata_error_handler(u8 channel ATTR((unused)), int drive ATTR((unused)), u8 status ATTR((unused)))
 {
 	u8 error = ata_read_reg(channel, ATA_REG_ERROR);
 	u8 altstatus = ata_read_reg(channel, ATA_REG_ALTSTATUS);
-	printk("ide: read error on channel %d and drive %d: status=0x%X, error=0x%X,\n\taltstatus=0x%X\n", channel, drive, status, error, altstatus);
+	syslog(KERN_WARN, "ide: read error on channel %d and drive %d: status=0x%X, error=0x%X, altstatus=0x%X", channel, drive, status, error, altstatus);
 	return -ENXIO;
 }
 
@@ -493,11 +493,17 @@ int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void
 		// HPIOI1: Check_Status State (ATA v6 Spec. pg. 333)
 		while(1)
 		{
-			//ata_wait(channel);
+			ata_wait(channel);
 			status = ata_read_reg(channel, ATA_REG_STATUS);
 			// Transition HPIOI1:HIO
 			if( !(status & ATA_SR_BSY) && !(status & ATA_SR_DRQ) ){
-				return ata_error_handler(channel, (int)drive, status);
+				if( direction == ATA_PIO_READ ){
+					ata_error_handler(channel, (int)drive, status);
+					return -ENXIO;
+				} else {
+					return 0;
+				}
+				//return ata_error_handler(channel, (int)drive, status);
 			}
 			
 			// Transition HPIOI1:HPIOI1
@@ -517,7 +523,7 @@ int ata_pio_transfer(u8 channel, u8 drive, u8 direction, u32 lba, u8 count, void
 		count = (u8)(count - 1);
 		location = (void*)( (char*)location + 512 );
 		
-		if( count == 0 ){
+		if( count == 0 && direction == ATA_PIO_READ ){
 			break;
 		}
 		

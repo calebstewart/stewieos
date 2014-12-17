@@ -68,7 +68,7 @@ struct superblock_operations initfs_super_ops = {
 
 struct filesystem initfs = {
 	.fs_name = "initfs",
-	.fs_flags = FS_NODEV | FS_RDONLY,
+	.fs_flags = FS_NODEV,
 	.fs_ops = &initfs_ops
 };
 
@@ -95,9 +95,10 @@ int initfs_install(multiboot_info_t* mb)
 	{
 		return result;
 	} else { 
-		result = sys_mount(NULL, "/", "initfs", MS_RDONLY, ((char*)mb));
+		result = sys_mount(NULL, "/", "initfs", 0, ((char*)mb));
 		if( result != 0 )
 		{
+			syslog(KERN_ERR, "initfs: unable to mount initfs! error code %d.", -result);
 			return result;
 		}
 	}
@@ -112,7 +113,7 @@ int initfs_read_super(struct filesystem* fs, struct superblock* super, dev_t dev
 	
 	// was the bootloader configured to give us modules?
 	if( !(mb->flags & MULTIBOOT_INFO_MODS) ){
-		printk("initfs: warning: no modules found (flags: 0x%X).\n", mb->flags);
+		syslog(KERN_WARN, "initfs: no modules found (flags: 0x%X).\n", mb->flags);
 		//return -ENODEV;
 		mb->mods_count = 0;
 	} else {

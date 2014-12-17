@@ -1,6 +1,8 @@
 #ifndef _TIMER_H_
 #define _TIMER_H_
 
+#include <time.h>
+
 #define TIMER_MAX_CALLBACKS 128				// maximum number of timer callbacks
 #define TIMER_CANCEL ((unsigned long)-1)		// cancel the timer
 #define TIMER_IN(t) (timer_get_ticks() + (t))		// fire the time in t ticks from now
@@ -20,5 +22,8 @@ tick_t timer_get_ticks( void );
 
 // Setup a timer callback to fire at a specific time
 int timer_callback(tick_t when, timer_callback_t callback);
+
+time_t timer_get_time( void );
+void timer_sync_time( void );
 
 #endif

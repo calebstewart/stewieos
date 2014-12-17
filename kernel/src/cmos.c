@@ -2,19 +2,20 @@
 #include "error.h"
 
 static int g_nmi_state = 1;
-unsigned int sec_until_mon[12] = {
-	0,		/* January (no months before it) */
-	2678400,	/* February (seconds in January) ASSUMED 28 Days! Add 86400 to each one after this for leap year! */
-	5097600,	/* March (seconds in january and february) */
-	7776000,	/* April (seconds before march + seconds in march) */
-	10368000,	/* May (seconds in before April + seconds in April) */
-	13046400,	/* June */
-	15638400,	/* July */
-	18316800,	/* August */
-	20995200,	/* September */
-	23587200,	/* October */
-	26265600,	/* November */
-	28857600	/* December */
+unsigned int mon_to_days[13] = {
+	0,
+	31,
+	31+28,
+	31+28+31,
+	31+28+31+30,
+	31+28+31+30+31,
+	31+28+31+30+31+30,
+	31+28+31+30+31+30+31,
+	31+28+31+30+31+30+31+31,
+	31+28+31+30+31+30+31+31+30,
+	31+28+31+30+31+30+31+31+30+31,
+	31+28+31+30+31+30+31+31+30+31+30,
+	31+28+31+30+31+30+31+31+30+31+30+31
 };
 
 int cmos_nmi_set(int state)
@@ -40,21 +41,60 @@ void cmos_write(int reg, u8 v)
 
 time_t rtc_read(void)
 {
-	// wait for update in progress flag to go from 1 -> 0
-	while( !(cmos_read(CMOS_RTC_STA) & RTC_FLAG_UPDATE) );
-	while( (cmos_read(CMOS_RTC_STA) & RTC_FLAG_UPDATE) );
 	// Read all parameters
 	u8 s = cmos_read(CMOS_RTC_SEC);
 	u8 m = cmos_read(CMOS_RTC_MIN);
 	u8 h = cmos_read(CMOS_RTC_HRS);
 	u8 d = cmos_read(CMOS_RTC_DAY);
 	u8 mo = cmos_read(CMOS_RTC_MON);
-	int y = cmos_read(CMOS_RTC_YRS) + 30; // we assume the RTC reports a year in the 2000s, since I wrote this in 2014...
+	int y = cmos_read(CMOS_RTC_YRS); // we assume the RTC reports a year in the 2000s, since I wrote this in 2014...
 	
-	printk("%d %d %d %02d:%02d:%02d\n", y+1970,mo,d,h,m,s);
+	u8 last_s, last_m, last_h, last_d, last_mo;
+	int last_y;
 	
-	// google said a year was 3.15569e7... so I guess I will blindly ignore leap years... :(
-	time_t tm = s + (m*60) + (h*3600) + (d*86400) + sec_until_mon[mo] + (y*31556900);
+	do
+	{
+		last_s = s;
+		last_m = m;
+		last_h = h;
+		last_d = d;
+		last_mo = mo;
+		last_y = y;
+		
+		s = cmos_read(CMOS_RTC_SEC);
+		m = cmos_read(CMOS_RTC_MIN);
+		h = cmos_read(CMOS_RTC_HRS);
+		d = cmos_read(CMOS_RTC_DAY);
+		mo = cmos_read(CMOS_RTC_MON);
+		y = cmos_read(CMOS_RTC_YRS); // we assume the RTC reports a year in the 2000s, since I wrote this in 2014...
+		
+	}while( last_s != s || last_m != m || last_h != h || last_d != d || last_mo != mo || last_y != y );
+	
+	u8 stb = cmos_read(CMOS_RTC_STB);
+	
+	// Convert BCD to binary
+	if( !(stb & 0x04) )
+	{
+		s = (u8)((s & 0x0F) + ((s >> 4) * 10));
+		m = (u8)((m & 0x0F) + ((m >> 4) * 10));
+		h = (u8)(( (h&0x0F) + ((((h & 0x70) >> 4)*10)|(h&0x80) )));
+		d = (u8)((d & 0x0F) + ((d >> 4) * 10));
+		mo = (u8)((mo & 0x0F) + ((mo >> 4) * 10));
+		y = (u8)((y & 0x0F) + ((y >> 4) * 10)) + 100;
+	}
+	
+	// convert 12 hour to 24 hour
+	if( !(stb & 0x02) && (h & 0x08) ){
+		h = (u8)(((h & 0x7F) + 12) % 24);
+	}
+	
+	// add a day for a leap year after february
+	if( mo > 2 && ((y+1900)%4) == 0 ){
+		d++;
+	}
+	
+	time_t tm = s + m*60 + h*3600 + (d-1+mon_to_days[mo-1])*86400 + (y-70)*31536000 + ((y-69)/4)*86400 - ((y-1)/100)*86400 + ((y+299)/400)*86400;
+	//time_t tm = s + (m*60) + (h*3600) + ((d+mon_to_days[mo-1])*86400) + ((mo-1)*2678400) + ((y+30)*31536000);
 	
 	return tm;
 }

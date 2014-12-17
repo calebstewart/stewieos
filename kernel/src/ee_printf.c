@@ -420,7 +420,8 @@ static char *flt(char *str, double num, int size, int precision, char fmt, int f
 
 #endif
 
-static int ee_vsprintf(char *buf, const char *fmt, va_list args)
+int ee_vsprintf(char *buf, const char *fmt, va_list args);
+int ee_vsprintf(char *buf, const char *fmt, va_list args)
 {
   int len;
   unsigned long num;

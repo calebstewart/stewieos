@@ -28,6 +28,9 @@ DECL_SYSCALL(syscall_readdir);
 DECL_SYSCALL(syscall_chdir);
 DECL_SYSCALL(syscall_getcwd);
 DECL_SYSCALL(syscall_mknod)
+DECL_SYSCALL(syscall_shutdown);
+DECL_SYSCALL(syscall_detach);
+DECL_SYSCALL(syscall_access);
 
 syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXIT] = syscall_exit,
@@ -51,6 +54,9 @@ syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_CHDIR] = syscall_chdir,
 	[SYSCALL_GETCWD] = syscall_getcwd,
 	[SYSCALL_MKNOD] = syscall_mknod,
+	[SYSCALL_SHUTDOWN] = syscall_shutdown,
+	[SYSCALL_DETACH] = syscall_detach,
+	[SYSCALL_ACCESS] = syscall_access
 };
 
 void syscall_handler(struct regs* regs)
@@ -168,4 +174,20 @@ void syscall_getcwd(struct regs* regs)
 void syscall_mknod(struct regs* regs)
 {
 	regs->eax = (u32)sys_mknod((const char*)regs->ebx, (mode_t)regs->ecx, (dev_t)regs->edx);
+}
+
+void syscall_shutdown(struct regs* regs)
+{
+	regs->eax = (u32)sys_shutdown();
+}
+
+void syscall_detach(struct regs* regs)
+{
+	regs->eax = 0;
+	task_detach((pid_t)regs->ebx);
+}
+
+void syscall_access(struct regs* regs)
+{
+	regs->eax = (u32)sys_access((const char*)regs->ebx, (int)regs->ecx);
 }

@@ -1,8 +1,8 @@
-SOURCES:=src/main.c src/builtin.c
+SOURCES:=src/main.c
 OBJECTS:=$(SOURCES:.c=.o)
 CFLAGS:=-g -static -std=gnu11
 LDFLAGS:=
-PROJECT_NAME:=sh
+PROJECT_NAME:=syslogd
 
 .PHONY: all install clean
 

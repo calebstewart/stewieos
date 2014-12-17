@@ -179,6 +179,9 @@ int e2_inode_mknod(struct inode* parent, const char* name, mode_t mode, dev_t de
 		return result;
 	}
 	
+	e2_inode_flush(parent);
+	e2_inode_flush(inode);
+	
 	// release our reference to the inode
 	i_put(inode);
 	
@@ -192,7 +195,7 @@ int e2_inode_flush(struct inode* inode)
 	e2_super_private_t* e2fs = EXT2_SUPER(inode->i_super);
 	ssize_t result;
 
-	if( !priv->dirty ) return 0;
+	//if( !priv->dirty ) return 0;
 	
 	// flush the new block map to the disk
 	e2_inode_write_block_map(inode, priv->block);
@@ -299,7 +302,7 @@ ino_t e2_alloc_inode(struct superblock* sb, e2_inode_t* data)
 // 		return EXT2_BAD_INO;
 // 	}
 	
-	debug_message("allocated inode #%d with mod 0x%X", ino, data->i_mode);
+	//debug_message("allocated inode #%d with mod 0x%X", ino, data->i_mode);
 	
 	// Fix accounting information
 	e2fs->bgtable[bg].bg_free_inodes_count--;
@@ -642,6 +645,17 @@ int e2_inode_write_block_map(struct inode* inode, u32* map)
 	return 0;
 }
 
+/* truncate a given inode (resize to zero) */
+int e2_inode_truncate(struct inode* inode)
+{
+	ssize_t sz = e2_inode_resize(inode, 0);
+	if( sz < 0 ){
+		return (int)sz;
+	}
+	e2_inode_flush(inode);
+	return 0;
+}
+
 ssize_t e2_inode_resize(struct inode* inode, size_t newsize)
 {
 	e2_inode_private_t* priv = EXT2_INODE(inode);
@@ -652,9 +666,47 @@ ssize_t e2_inode_resize(struct inode* inode, size_t newsize)
 	// that's dumb...
 	if( newsize == priv->inode->i_size ){
 		return newsize;
+	} else if( newsize < priv->inode->i_size ) { // less than old size
+		u32 new_nblocks = newsize / sb->s_blocksize;
+		if( newsize % sb->s_blocksize ) new_nblocks++;
+		
+		if( new_nblocks == nblocks ){
+			priv->inode->i_size = newsize;
+			priv->dirty = 1;
+			e2_inode_flush(inode);
+			return newsize;
+		}
+		
+		// realloc the new block structure for the new blocks
+		u32* newblock;
+		u32 newblock_length = new_nblocks*4;
+		if( new_nblocks < 15 ) newblock_length = 15*4;
+		newblock = (u32*)kmalloc(newblock_length);
+		if( newblock == NULL ){
+			return -ENOMEM;
+		} else {
+			memset(newblock, 0, newblock_length);
+		}
+		
+		memcpy(newblock, priv->block, new_nblocks*4);
+		
+		// free the old blocks that aren't needed anymore
+		for( u32 b = new_nblocks; b < nblocks; ++b){
+			e2_free_block(sb, priv->block[b]);
+		}
+		kfree(priv->block);
+		priv->block = newblock;
+		
+		// Update reference counting
+		priv->dirty = 1;
+		priv->inode->i_size = newsize;
+		priv->inode->i_blocks = (new_nblocks*sb->s_blocksize)/512;
+		e2_inode_flush(inode);
+		
 	} else if( (u32)(priv->inode->i_size/sb->s_blocksize) == (u32)(newsize/sb->s_blocksize) && priv->inode->i_size != 0){
 		priv->inode->i_size = newsize;
 		priv->dirty = 1;
+		e2_inode_flush(inode);
 		return newsize;
 	} else if( newsize > priv->inode->i_size ){
 		u32 extra_blocks = (newsize - priv->inode->i_size)/sb->s_blocksize;
@@ -674,6 +726,7 @@ ssize_t e2_inode_resize(struct inode* inode, size_t newsize)
 		for(u32 i = nblocks; i < (nblocks+extra_blocks); ++i){
 			priv->block[i] = e2_alloc_block(sb);
 			if( priv->block[i] == 0 ){
+				e2_inode_flush(inode);
 				return priv->inode->i_size;
 			}
 			// update block and byte count
@@ -682,23 +735,8 @@ ssize_t e2_inode_resize(struct inode* inode, size_t newsize)
 		}
 		// correct size
 		priv->inode->i_size = newsize;
-	} else { // less than old size
-		u32 new_nblocks = newsize / sb->s_blocksize;
-		if( newsize % sb->s_blocksize ) new_nblocks++;
 		
-		// realloc the new block structure for the new blocks
-		u32* newblock = (u32*)kmalloc(new_nblocks*4);
-		if( newblock == NULL ){
-			return -ENOMEM;
-		}
-		memcpy(newblock, priv->block, new_nblocks*4);
-		kfree(priv->block);
-		newblock = priv->block;
-		
-		// Update reference counting
-		priv->dirty = 1;
-		priv->inode->i_size = newsize;
-		priv->inode->i_blocks = (new_nblocks*sb->s_blocksize)/512;
+		e2_inode_flush(inode);
 	}
 		
 	
@@ -721,7 +759,7 @@ ssize_t e2_inode_io(struct inode* inode, int cmd, off_t offset, size_t size, cha
 		}
 		// same as above, but we can just read part of the requested area
 		if( (offset+size) > priv->inode->i_size ){
-			//size = priv->inode->i_size-offset;
+			size = priv->inode->i_size-offset;
 		}
 	} else {
 		// we can write past the end. Just resize
@@ -857,6 +895,7 @@ int e2_inode_link(struct inode* parent, const char* name, struct inode* inode)
 		dirent->inode = 0;
 		// we will then write this block to disk later
 		dirent_block = parent_priv->block[nblocks]; // nblocks was the size, now it is the last index (we increased size by 1)
+		e2_inode_flush(parent);
 	}
 	
 	e2_dirent_t* split = NULL;
@@ -913,6 +952,9 @@ int e2_inode_link(struct inode* parent, const char* name, struct inode* inode)
 	spin_unlock(&inode_priv->rw_lock);
 	spin_unlock(&parent_priv->rw_lock);
 	
+	e2_inode_flush(inode);
+	e2_inode_flush(parent);
+	
 	return 0;	
 }
 
@@ -964,10 +1006,14 @@ int e2_inode_unlink(struct inode* parent, const char* name)
 				// unlock the child
 				spin_unlock(&child_priv->rw_lock);
 				
+				e2_inode_flush(child);
+				
 				// free our inode reference
 				i_put(child); // the inode probably gets freed here, unless it is open somewhere else
 				
 				spin_unlock(&parent_priv->rw_lock);
+				
+				e2_inode_flush(parent);
 				
 				return 0;
 			}

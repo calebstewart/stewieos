@@ -298,7 +298,7 @@ int sys_insmod(const char* filename)
 		}
 	}
 	
-	debug_message("loaded %s at address 0x%x", filename, module->m_loadaddr);
+	syslog(KERN_NOTIFY, "loaded %s at address 0x%x", filename, module->m_loadaddr);
 	
 	return 0;
 }

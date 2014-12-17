@@ -153,7 +153,7 @@ ssize_t block_read(dev_t devid, off_t off, size_t count, char* buffer)
 	}
 	
 	// Aqcuire the data lock
-	spin_lock(&device->lock);
+	//spin_lock(&device->lock);
 	
 	// calculate the LBA values
 	lba = (off_t)(off / device->blksz);
@@ -224,7 +224,7 @@ int block_write(dev_t devid, off_t off, size_t count, const char* buffer)
 	}
 	
 	// Aqcuire the data lock
-	spin_lock(&device->lock);
+	//spin_lock(&device->lock);
 	
 	if( count == 0 ){
 		spin_unlock(&device->lock);

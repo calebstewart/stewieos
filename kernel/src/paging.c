@@ -300,25 +300,25 @@ void page_fault(struct regs* regs)
 	int reserved = regs->err & 0x8;
 	//int id = regs->err & 0x10;
 	
-	printk("%2Vpage_fault: process %d caused a page fault at address 0x%x\n", current->t_pid, address);
-	printk("%2Vpage_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).\n", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
+	syslog(KERN_PANIC, "%2Vpage_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
+	syslog(KERN_PANIC, "%2Vpage_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
 	
 	/*
-	printk("%2VPAGE FAULT ( %s%s%s%s)\nAddress: 0x%x\n", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
-	printk("%2VError Code: 0x%X\n", regs->err);
-	printk("%2VEFLAGS: 0x%X\n", regs->eflags);
-	printk("%2VEIP: 0x%X\n", regs->eip);
+	syslog(KERN_PANIC, "%2VPAGE FAULT ( %s%s%s%s)Address: 0x%x", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
+	syslog(KERN_PANIC, "%2VError Code: 0x%X", regs->err);
+	syslog(KERN_PANIC, "%2VEFLAGS: 0x%X", regs->eflags);
+	syslog(KERN_PANIC, "%2VEIP: 0x%X", regs->eip);
 	u32 cr0, cr3;
 	asm volatile ("movl %%cr0,%0;": "=r"(cr0));
 	asm volatile ("movl %%cr3,%0;": "=r"(cr3));
-	printk("%2VCR0: 0x%X\n", cr0);
-	printk("%2VCR3: 0x%X\n", cr3);
-	printk("%2VCS: 0x%X\nDS: 0x%X\n", regs->cs, regs->ds);*/
+	syslog(KERN_PANIC, "%2VCR0: 0x%X", cr0);
+	syslog(KERN_PANIC, "%2VCR3: 0x%X", cr3);
+	syslog(KERN_PANIC, "%2VCS: 0x%XDS: 0x%X", regs->cs, regs->ds);*/
 	
-	printk("%2Vpage_fault: killing task %d.\n", current->t_pid);
+	syslog(KERN_PANIC, "%2Vpage_fault: killing task %d.", current->t_pid);
 	sys_exit(-1);
 	
-	printk("%2Vsystem: unable to kill task. entering infinite loop instead...\n");
+	syslog(KERN_PANIC, "%2Vsystem: unable to kill task. entering infinite loop instead...");
 	while(1) asm volatile("hlt");
 }
 
@@ -343,7 +343,7 @@ int copy_page_table(page_dir_t* dstdir, page_dir_t* srcdir, int t)
 		u32 phys = 0;
 		dstdir->table[t] = (page_table_t*)kmalloc_ap(sizeof(page_table_t), &phys);
 		if(!dstdir->table[t]){
-			printk("%2Vcopy_page_table: unable to allocate page table!");
+			syslog(KERN_ERR, "copy_page_table: unable to allocate page table!");
 			return -1;
 		}
 		dstdir->tablePhys[t] = phys | 0x7;
@@ -400,11 +400,11 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 	page_dir_t* dst = (page_dir_t*)kmalloc_ap(sizeof(page_dir_t), &tmp);
 	// check for success
 	if(!dst){
-		printk("%2Vcopy_page_dir: unable to allocate new directory!\n");
+		syslog(KERN_ERR, "copy_page_dir: unable to allocate new directory!\n");
 		return NULL;
 	}
 	if( ((u32)dst) & 0xFFF ){
-		printk("%2Verror: page directory not page aligned!\n");
+		syslog(KERN_PANIC, "error: page directory not page aligned!\n");
 		while(1);
 	}
 	memset((char*)dst + 0x1000, 0, 0x1004);
@@ -422,7 +422,7 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 			dst->tablePhys[t] = src->tablePhys[t];
 		} else {
 			if( copy_page_table(dst, src, t) != 0 ){
-				printk("%2Vcopy_page_dir: unable to copy page table!\n");
+				syslog(KERN_ERR, "copy_page_dir: unable to copy page table!\n");
 				return NULL;
 			}
 		}
@@ -485,7 +485,7 @@ void display_page_dir(page_dir_t* dir)
 	u32 start_frame = 0;
 	u32 length = 0;
 	
-	printk("Page Directory Mappings (dir=0x%X)\n", dir);
+	syslog(KERN_NOTIFY, "Page Directory Mappings (dir=0x%X)\n", dir);
 	while( addr < 0xFFFFFFFF )
 	{
 		page_t* page = get_page((void*)addr, 0, dir);
@@ -497,7 +497,7 @@ void display_page_dir(page_dir_t* dir)
 				start_frame = page->frame;
 				length = 1;
 			} else {
-				printk("0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
+				syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
 				start_addr = addr;
 				start_frame = page->frame;
 				length = 1;

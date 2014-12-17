@@ -12,6 +12,7 @@ int e2_file_open(struct file* file ATTR((unused)), struct dentry* dentry ATTR((u
 
 int e2_file_close(struct file* file ATTR((unused)), struct dentry* dentry ATTR((unused)))
 {
+	file_flush(file);
 	return 0;
 }
 
@@ -27,6 +28,8 @@ ssize_t e2_file_read(struct file* file, char* buffer, size_t count)
 	
 	// Increment the offset
 	file->f_off += result;
+	
+	file_flush(file);
 	
 	// return byte count
 	return result;
@@ -45,6 +48,8 @@ ssize_t e2_file_write(struct file* file, const char* buffer, size_t count)
 	// Increment the offset
 	file->f_off += result;
 	
+	file_flush(file);
+	
 	// return byte count
 	return result;
 }
@@ -59,8 +64,10 @@ int e2_file_readdir(struct file* file, struct dirent* dirent, size_t count)
 	{
 		ssize_t nread = e2_inode_io(inode, EXT2_READ, file->f_off, 264, (char*)e2ent);
 		if( nread == 0 ){
+			file_flush(file);
 			return (int)i;
 		} else if( nread < 0 ){
+			file_flush(file);
 			return (int)nread;
 		} else if( e2ent->inode != 0 ) {
 			dirent[i].d_ino = (ino_t)e2ent->inode;
@@ -72,6 +79,8 @@ int e2_file_readdir(struct file* file, struct dirent* dirent, size_t count)
 		}
 		file->f_off += e2ent->rec_len;
 	}
+	
+	file_flush(file);
 	
 	return count;
 }

@@ -39,7 +39,7 @@
 #define EXT2_GOOD_OLD_INODE_SIZE			128
 
 // Specify where we support the dynamic revision
-#define EXT2_HAS_DYNAMIC_REV				0
+#define EXT2_HAS_DYNAMIC_REV				1
 
 // Values for s_feature_compat
 #define EXT2_FEATURE_COMPAT_DIR_PREALLOC		0x0001
@@ -364,6 +364,7 @@ int e2_inode_read_block_map(struct inode* inode, u32* buffer); // read the entir
 int e2_inode_write_block_map(struct inode* inode, u32* buffer); // write the entire block map
 ssize_t e2_inode_resize(struct inode* inode, size_t newsize);
 ssize_t e2_inode_io(struct inode* inode, int cmd, off_t offset, size_t size, char* buffer);
+int e2_inode_truncate(struct inode* inode);
 /* Middle-Level Inode Operations */
 int e2_inode_link(struct inode* parent, const char* name, struct inode* inode); // associate the given with the inode within the given parent directory
 int e2_inode_unlink(struct inode* inode, const char* name); // unlink the given name from within the given directory

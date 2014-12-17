@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <string.h>
+#include "builtin.h"
 
 int shell_exit = 0;
 
@@ -22,6 +23,41 @@ void strip_newline(char* buffer)
 	}
 }
 
+/* Find an executable within the given path environment variable with the given name.
+ * The full path to the executable is stored in buffer. If 'name' is an absolute path
+ * then existence is simply checked, and then the path is copied to buffer.
+ * 
+ * returns NULL for a non-existent executable and returns buffer for a good executable.
+ */
+static char* find_exec(const char* name, char* buffer, char* path)
+{
+	char old_value = 0;
+	char* colon = NULL;
+	
+	if( *name == '/' ){
+		if( access(name, F_OK | X_OK) != 0 ){
+			return NULL;
+		} else {
+			strcpy(buffer, name);
+			return buffer;
+		}
+	}
+	
+	do
+	{
+		colon = strchrnul(path, ':');
+		old_value = *colon;
+		sprintf(buffer, "%s/%s", path, name);
+		if( access(buffer, F_OK | X_OK) == 0 ){
+			return buffer;
+		}
+		*colon = old_value;
+		path = colon+1;
+	} while( old_value != 0 );
+	
+	return NULL;
+}
+
 int main(int argc, char** argv, char** envp)
 {	
 	shell(stdin, envp);
@@ -31,12 +67,15 @@ int main(int argc, char** argv, char** envp)
 
 void shell(FILE* filp, char** envp)
 {
+	char exec_buffer[512];
+	char* exec_path;
 	char line[512];
 	int argc = 0;
 	char** argv;
 	pid_t pid = 0;
 	int result = 0, status = 0;
 	char cwd[256];
+	int wait_on_child = 1;
 	
 	if( getcwd(cwd, 256) == NULL ){
 		strcpy(cwd, "sh");
@@ -49,6 +88,7 @@ void shell(FILE* filp, char** envp)
 				break;
 			}
 		} else {
+			getcwd(cwd, 256);
 			printf("root@%s $ ",cwd);
 			fflush(stdout);
 		}
@@ -90,32 +130,31 @@ void shell(FILE* filp, char** envp)
 			}
 		}
 		
-		if( strcmp(argv[0], "cd") == 0 || strcmp(argv[0], "chdir") == 0 )
+		if( strcmp(argv[argc-1], "&") == 0 ){
+			wait_on_child = 0;
+		} else {
+			wait_on_child = 1;
+		}
+		
+		// look for a builtin command
+		builtin_command_func_t cmd = find_command(argv[0]);
+		if( cmd != NULL )
 		{
-			if( argc != 2 ){
-				printf("%s: usage:\n\t%s new_path\n", argv[0], argv[0]);
-			}
-			result = chdir(argv[1]);
-			if( result < 0 ){
-				printf("error: unable to change directories: %d\n", errno);
-			}
-			if( getcwd(cwd, 256) == NULL ){
-				strcpy(cwd, "sh");
-			}
+			cmd(argc, argv);
 			free(argv);
 			continue;
 		}
-			
 		
-		// Look for the requested file
-		int fd = open(argv[0], O_RDONLY);
-		if( fd < 0 ){
+		// look for an executable
+		exec_path = find_exec(argv[0], exec_buffer, getenv("PATH"));
+		if( exec_path == NULL )
+		{
 			printf("%s: command not found\n", argv[0]);
 			free(argv);
 			continue;
+		} else {
+			argv[0] = exec_path;
 		}
-		
-		close(fd);
 		
 		pid = fork();
 		if( pid < 0 ){ // error
@@ -124,7 +163,9 @@ void shell(FILE* filp, char** envp)
 			result = execve(argv[0], argv, envp);
 			printf("error: unable to execute %s: %d\n", argv[0], result);
 		} else { // parent
-			pid = waitpid(pid, &status, 0);
+			if( wait_on_child ){
+				pid = waitpid(pid, &status, 0);
+			}
 		}
 		
 		free(argv);
