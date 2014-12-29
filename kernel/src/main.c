@@ -118,11 +118,13 @@ int kmain( multiboot_info_t* mb )
 		syslog(KERN_WARN, "Unable to load module. error code %d", error);
 	}
 	
+	syslog(KERN_NOTIFY, "Creating virtual tty node /dev/vtty...");
 	result = sys_mknod("/dev/vtty", S_IFCHR, makedev(0x02, 0));
 	if( result != 0 && result != (-EEXIST) ){
 		syslog(KERN_WARN, "Unable to create vtty node. error code %d", result);
 	}
 	
+	syslog(KERN_NOTIFY, "Setting up system logging interface...");
 	result = begin_syslog_daemon("/var/log/syslog");
 	if( result < 0 ){
 		printk("error: unable to initialize kernel system log.\n");
@@ -135,6 +137,9 @@ int kmain( multiboot_info_t* mb )
 	if( pid < 0 ) {
 		syslog(KERN_ERR, "Unable to fork process. error code %d", pid);
 	} else if( pid == 0 ) {
+		sys_open("/dev/vtty", O_RDWR, 0);
+		sys_open("/dev/vtty", O_RDWR, 0);
+		sys_open("/dev/vtty", O_RDWR, 0);
 		char* argv[2] = {(char*)INIT, NULL}, *envp[2] = {(char*)"PATH=/bin", NULL};
 		error = sys_execve(INIT, argv, envp);
 		syslog(KERN_NOTIFY, "INIT: unable to execute %s. error code %d", INIT, error);

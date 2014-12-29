@@ -80,6 +80,8 @@ void task_init( void )
 	INIT_LIST(&init->t_children);
 	INIT_LIST(&init->t_globlink);
 	INIT_LIST(&init->t_ttywait);
+	INIT_LIST(&init->t_mesgq.queue);
+	spin_init(&init->t_mesgq.lock);
 	//printk("%2Vtask_init: init->t_dir=%08X\n", init->t_dir);
 	//while(1);
 	// we are still using kerndir up to now
@@ -296,6 +298,13 @@ void task_kill(struct task* dead)
 		list_rem(&child->t_sibling);
 	}
 	
+	// delete all pending messages
+	while( !list_empty(&dead->t_mesgq.queue) ){
+		message_container_t* cont = list_entry(list_first(&dead->t_mesgq.queue), message_container_t, link);
+		list_rem(&cont->link);
+		kfree(cont);
+	}
+	
 	// The task is not actually dead yet.
 	// It needs to notify the parent of it's death,
 	// then the parent will do what it needs to.
@@ -428,6 +437,8 @@ caddr_t sys_sbrk(int incr)
 		addr += 0x1000;
 	}
 	
+	current->t_dataend = addr;
+	
 	return result;
 }
 
@@ -471,6 +482,8 @@ int sys_fork( void )
 	INIT_LIST(&task->t_queue);
 	INIT_LIST(&task->t_globlink);
 	INIT_LIST(&task->t_ttywait);
+	INIT_LIST(&task->t_mesgq.queue);
+	spin_init(&task->t_mesgq.lock);
 	
 	copy_task_vfs(&task->t_vfs, &current->t_vfs);
 

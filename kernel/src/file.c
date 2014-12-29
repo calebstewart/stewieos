@@ -84,6 +84,13 @@ struct file* file_open(struct path* path, int flags)
 		file->f_ops = path->p_dentry->d_inode->i_default_fops;
 	}
 	
+	if( file->f_ops == NULL )
+	{
+		path_put(&file->f_path);
+		kfree(file);
+		return ERR_PTR(-ENXIO);
+	}
+	
 	if( file->f_ops->open ){
 		result = file->f_ops->open(file, file->f_path.p_dentry, flags);
 		if( result != 0 ){
@@ -107,6 +114,12 @@ int file_flush(struct file* file)
 	}
 	
 	return 0;
+}
+
+struct file* file_get(struct file* file)
+{
+	file->f_refs++;
+	return file;
 }
 
 int file_close(struct file* file)
@@ -225,6 +238,11 @@ int file_ioctl(struct file* file, int request, char* argp)
 int file_stat(struct file* file, struct stat* st)
 {
 	struct inode* inode = file->f_path.p_dentry->d_inode;
+	
+	if( inode == NULL ){
+		syslog(KERN_WARN, "NULL inode within dentry (d_name=\"%s\").", file->f_path.p_dentry);
+		return -EINVAL;
+	}
 	
 	// If the driver doesn't provide fstat, try and
 	// mimic it with cached values in the inode.

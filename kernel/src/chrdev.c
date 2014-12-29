@@ -42,7 +42,7 @@ int unregister_chrdev(int major)
 
 struct file_operations* get_chrdev_fops(int major)
 {
-	if( major >= 256 ){
+	if( major >= 256 || !chrdev[major] ){
 		return NULL;
 	}
 	return chrdev[major]->fops;

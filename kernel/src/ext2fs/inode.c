@@ -195,7 +195,7 @@ int e2_inode_flush(struct inode* inode)
 	e2_super_private_t* e2fs = EXT2_SUPER(inode->i_super);
 	ssize_t result;
 
-	//if( !priv->dirty ) return 0;
+	if( !priv->dirty ) return 0;
 	
 	// flush the new block map to the disk
 	e2_inode_write_block_map(inode, priv->block);
@@ -491,9 +491,13 @@ int e2_inode_write_block_map(struct inode* inode, u32* map)
 	u32 idx = 0;
 	u32 nblocks = (priv->inode->i_blocks * 512) / inode->i_super->s_blocksize;
 	
+	if( S_ISBLK(priv->inode->i_mode) || S_ISCHR(priv->inode->i_mode) || S_ISFIFO(priv->inode->i_mode) ){
+		return 0;
+	}
+	
 	// if there are no blocks, don't continue
 	if( nblocks == 0 ){
-		map[0] = 0;
+		memset(priv->inode->i_block, 0, 4*15);
 		return 0;
 	}
 	
@@ -506,6 +510,9 @@ int e2_inode_write_block_map(struct inode* inode, u32* map)
 	
 	// are we done?
 	if( idx == nblocks ){
+		priv->inode->i_block[12] = 0;
+		priv->inode->i_block[13] = 0;
+		priv->inode->i_block[14] = 0;
 		return 0;
 	}
 	
@@ -645,13 +652,148 @@ int e2_inode_write_block_map(struct inode* inode, u32* map)
 	return 0;
 }
 
+static void e2_release_singly_indirect(struct inode* inode, u32 blocknr)
+{
+	struct superblock* sb = inode->i_super;
+	e2_inode_private_t* priv = (e2_inode_private_t*)inode->i_private;
+	
+	// Allocate a block for the singly indirect map
+	u32* block = kmalloc(sb->s_blocksize);
+	if( block == NULL ){
+		syslog(KERN_ERR, "unable to allocate singly indirect block!\n");
+		return;
+	}
+	
+	// Read in the indirect map
+	e2_read_block(sb, blocknr, 1, (void*)block);
+	
+	// Free each block in the map
+	for(u32 i = 0; i < (sb->s_blocksize/4); ++i){
+		if( block[i] != 0 ){
+			e2_free_block(sb, block[i]);
+			if( priv->inode->i_size < sb->s_blocksize )
+				priv->inode->i_size = 0;
+			else
+				priv->inode->i_size -= sb->s_blocksize;
+			priv->inode->i_blocks -= (sb->s_blocksize/512);
+		} else {
+			break;
+		}
+	}
+	
+	// Free the block buffer
+	kfree(block);
+	
+	// Free the indirect block
+	e2_free_block(sb, blocknr);
+	
+	return;
+}
+
+static void e2_release_doubly_indirect(struct inode* inode, u32 blocknr)
+{
+	struct superblock* sb = inode->i_super;
+	
+	// Allocate a block for the doubly indirect map
+	u32* block = kmalloc(sb->s_blocksize);
+	if( block == NULL ){
+		syslog(KERN_ERR, "unable to allocate doubly indirect block!\n");
+		return;
+	}
+	
+	// Read in the indirect map
+	e2_read_block(sb, blocknr, 1, (void*)block);
+	
+	// Free each singly indirect block in the map and the block in the map
+	for(u32 i = 0; i < (sb->s_blocksize/4); ++i){
+		if( block[i] != 0 ){
+			// release all the indirect blocks
+			e2_release_singly_indirect(inode, block[i]);
+		} else {
+			break;
+		}
+	}
+	
+	// Free the block buffer
+	kfree(block);
+	
+	// Free the indirect block
+	e2_free_block(sb, blocknr);
+	
+	return;
+}
+
+static void e2_release_triply_indirect(struct inode* inode, u32 blocknr)
+{
+	struct superblock* sb = inode->i_super;
+	
+	// Allocate a block for the triply indirect map
+	u32* block = kmalloc(sb->s_blocksize);
+	if( block == NULL ){
+		syslog(KERN_ERR, "unable to allocate doubly indirect block!\n");
+		return;
+	}
+	
+	// Read in the indirect map
+	e2_read_block(sb, blocknr, 1, (void*)block);
+	
+	// Delete everything!
+	for(u32 i = 0; i < (sb->s_blocksize/4); ++i){
+		if( block[i] != 0 ){
+			e2_release_doubly_indirect(inode, block[i]);
+		} else {
+			break;
+		}
+	}
+	
+	// Free the block buffer
+	kfree(block);
+	
+	// Free the indirect block
+	e2_free_block(sb, blocknr);
+	
+	return;
+}
+
 /* truncate a given inode (resize to zero) */
 int e2_inode_truncate(struct inode* inode)
 {
-	ssize_t sz = e2_inode_resize(inode, 0);
-	if( sz < 0 ){
-		return (int)sz;
+	struct superblock* sb = inode->i_super;
+	e2_inode_private_t* priv = (e2_inode_private_t*)inode->i_private;
+	
+	if( 1 )
+	{
+		e2_inode_resize(inode, 0);
+	} else {
+		
+		// Free each block in the map
+		for(u32 i = 0; i < 12; ++i){
+			if( priv->inode->i_block[i] != 0 ){
+				e2_free_block(sb, priv->inode->i_block[i]);
+				if( priv->inode->i_size < sb->s_blocksize )
+					priv->inode->i_size = 0;
+				else
+					priv->inode->i_size -= sb->s_blocksize;
+				priv->inode->i_blocks -= (sb->s_blocksize/512);
+				priv->inode->i_block[i] = 0;
+			}
+		}
+		
+		if( priv->inode->i_block[12] ){
+			e2_release_singly_indirect(inode, priv->inode->i_block[12]);
+			priv->inode->i_block[12] = 0;
+		}
+		if( priv->inode->i_block[13] ){
+			e2_release_doubly_indirect(inode, priv->inode->i_block[13]);
+			priv->inode->i_block[13] = 0;
+		}
+		if( priv->inode->i_block[14] ){
+			e2_release_triply_indirect(inode, priv->inode->i_block[14]);
+			priv->inode->i_block[14] = 0;
+		}
 	}
+	
+	priv->dirty = 1;
 	e2_inode_flush(inode);
 	return 0;
 }

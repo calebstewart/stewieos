@@ -29,10 +29,23 @@ int begin_syslog_daemon(const char* syslog_device ATTR((unused)))
 		return -1;
 	}
 	
-	// open the pipe
-	int pipefd = sys_open("/dev/syslog_pipe", O_WRONLY | O_TRUNC, 0);
-	// grab the file handle
-	syslog_pipe = current->t_vfs.v_openvect[pipefd].file;
+	struct path path;
+	
+	// Lookup the pipe we just created
+	result = path_lookup("/dev/syslog_pipe", WP_DEFAULT, &path);
+	if( result != 0 ){
+		syslog(KERN_PANIC, "Hmm... I just created the pipe, but it doesn't exist...");
+		return result;
+	}
+	
+	// open the file for the syslog function
+	syslog_pipe = file_open(&path, O_WRONLY);
+	// that's not needed anymore
+	path_put(&path);
+	// Check for an error
+	if( IS_ERR(syslog_pipe) ){
+		return PTR_ERR(syslog_pipe);
+	}
 	
 	restore(flags);
 	
@@ -62,8 +75,8 @@ void syslog(int level, const char* format, ...)
 	// handled "in house"
 	if( syslog_pipe != NULL ){
 		file_write(syslog_pipe, buffer2, strlen(buffer2));
-	} else {
+	} //else {
 		printk("%s\n", buffer);
-	}
+	//}
 	
 }

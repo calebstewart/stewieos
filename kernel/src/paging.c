@@ -156,6 +156,8 @@ int alloc_page(page_dir_t* dir, void* addr, int user, int rw)
 	page_t* page = get_page(addr, 1, dir);
 
 	if( page->present != 0 ){
+		page->rw = (rw > 0);
+		page->user = (user > 0);
 		return 0;
 	}
 	

@@ -8,6 +8,8 @@
 #include "descriptor_tables.h"
 #include "timer.h"
 #include "pmm.h"
+#include "spinlock.h"
+#include <sys/message.h>
 
 // A running task
 #define TF_RUNNING ((u32)0x00000001)
@@ -25,8 +27,10 @@
 #define TF_EXECVE ((u32)0x00000040)
 // The task is waiting on IO
 #define TF_WAITIO ((u32)0x00000080)
+// The task is waiting on a message
+#define TF_WAITMESG ((u32)0x00000100)
 
-#define TF_WAITMASK (TF_WAITIO | TF_WAITSIG | TF_WAITTASK)
+#define TF_WAITMASK (TF_WAITIO | TF_WAITSIG | TF_WAITTASK | TF_WAITMESG)
 
 #define T_ISZOMBIE(task) ((task)->t_flags & TF_ZOMBIE)
 #define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
@@ -54,6 +58,19 @@
 // unused anyway).
 #define schedule() task_preempt((struct regs*)(NULL))
 
+typedef struct _message_container
+{
+	list_t link;
+	message_t message;
+} message_container_t;
+
+typedef struct _message_queue
+{
+	spinlock_t lock;
+	list_t queue;
+} message_queue_t;
+
+/* Process Task Structure */
 struct task
 {
 	pid_t			t_pid;					// process id
@@ -79,6 +96,7 @@ struct task
 	struct page_dir*	t_dir;					// page directory for this task
 	struct vfs		t_vfs;					// this tasks virtual file system information
 	struct regs		t_regs;					// Register Information for the task switch after an execve
+	message_queue_t		t_mesgq;				// message queue for ipc
 	
 	list_t			t_sibling;				// the link in the parents children list
 	list_t			t_children;				// list of child tasks (forked processes)
@@ -109,6 +127,9 @@ pid_t sys_getpid( void );
 int sys_fork( void );
 void sys_exit( int result );
 pid_t sys_waitpid(pid_t pid, int* status, int options);
+
+int sys_message_send(pid_t pid, unsigned int type, const char* what, size_t length);
+int sys_message_pop(message_t* message, unsigned int id, unsigned int flags);
 
 extern struct task* current;
 

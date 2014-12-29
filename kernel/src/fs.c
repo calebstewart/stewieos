@@ -207,12 +207,12 @@ void copy_task_vfs(struct vfs* d, struct vfs* s)
 {
 	memset(d, 0, sizeof(struct vfs));
 	path_copy(&d->v_cwd, &s->v_cwd);
-// 	for(int i = 0; i < 1024; ++i){
-// 		if( s->v_openvect[i].flags & FD_OCCUPIED ){
-// 			d->v_openvect[i].flags = s->v_openvect[i].flags;
-// 			d->v_openvect[i].file = s->v_openvect[i].file;
-// 		}
-// 	}
+	for(int i = 0; i < 1024; ++i){
+		if( s->v_openvect[i].flags & FD_OCCUPIED ){
+			d->v_openvect[i].flags = s->v_openvect[i].flags;
+			d->v_openvect[i].file = file_get(s->v_openvect[i].file);
+		}
+	}
 }
 
 void init_task_vfs(struct vfs* vfs)
@@ -229,6 +229,7 @@ void free_task_vfs(struct vfs* vfs)
 		if( vfs->v_openvect[i].flags & FD_OCCUPIED ){
 			file_close(vfs->v_openvect[i].file);
 			vfs->v_openvect[i].flags = 0;
+			vfs->v_openvect[i].file = NULL;
 		}
 	}
 }
@@ -1050,6 +1051,8 @@ int sys_fstat(int fd, struct stat* st)
 	}
 	
 	struct file* file = current->t_vfs.v_openvect[fd].file;
+	
+	syslog(KERN_NOTIFY, "sys_fstat: file=0x%p, dentry=0x%p", file, file->f_path.p_dentry);
 	
 	return file_stat(file, st);
 }

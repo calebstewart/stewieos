@@ -31,6 +31,8 @@ DECL_SYSCALL(syscall_mknod)
 DECL_SYSCALL(syscall_shutdown);
 DECL_SYSCALL(syscall_detach);
 DECL_SYSCALL(syscall_access);
+DECL_SYSCALL(syscall_message_send);
+DECL_SYSCALL(syscall_message_pop);
 
 syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXIT] = syscall_exit,
@@ -190,4 +192,14 @@ void syscall_detach(struct regs* regs)
 void syscall_access(struct regs* regs)
 {
 	regs->eax = (u32)sys_access((const char*)regs->ebx, (int)regs->ecx);
+}
+
+void syscall_message_send(struct regs* regs)
+{
+	regs->eax = (u32)sys_message_send((pid_t)regs->ebx, (unsigned int)regs->ecx, (const char*)regs->edx, (size_t)regs->edi);
+}
+
+void syscall_message_pop(struct regs* regs)
+{
+	regs->eax = (u32)sys_message_pop((message_t*)regs->ebx, (unsigned int)regs->ecx, (unsigned int)regs->edx);
 }

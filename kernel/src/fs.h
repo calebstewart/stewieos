@@ -349,6 +349,7 @@ int path_get_parent(struct path* path);
 
 struct file* file_open(struct path* path, int flags);
 int file_close(struct file* file);
+struct file* file_get(struct file* file);
 ssize_t file_read(struct file* file, void* buf, size_t count);
 ssize_t file_write(struct file* file, const void* buf, size_t count);
 off_t file_seek(struct file* file, off_t offsets, int whence);
