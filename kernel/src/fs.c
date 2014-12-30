@@ -1052,8 +1052,6 @@ int sys_fstat(int fd, struct stat* st)
 	
 	struct file* file = current->t_vfs.v_openvect[fd].file;
 	
-	syslog(KERN_NOTIFY, "sys_fstat: file=0x%p, dentry=0x%p", file, file->f_path.p_dentry);
-	
 	return file_stat(file, st);
 }
 

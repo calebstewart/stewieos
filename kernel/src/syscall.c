@@ -58,7 +58,9 @@ syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_MKNOD] = syscall_mknod,
 	[SYSCALL_SHUTDOWN] = syscall_shutdown,
 	[SYSCALL_DETACH] = syscall_detach,
-	[SYSCALL_ACCESS] = syscall_access
+	[SYSCALL_ACCESS] = syscall_access,
+	[SYSCALL_MESG_SEND] = syscall_message_send,
+	[SYSCALL_MESG_POP] = syscall_message_pop
 };
 
 void syscall_handler(struct regs* regs)

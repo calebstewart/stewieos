@@ -57,7 +57,7 @@ int e2_read_inode(struct superblock* sb, struct inode* inode)
 	}
 	
 	priv->block = (u32*)kmalloc(4 * priv->inode->i_blocks);
-	if( !priv->block ){
+	if( !priv->block && priv->inode->i_blocks ){
 		kfree(priv);
 		return -ENOMEM;
 	}
@@ -383,7 +383,7 @@ int e2_inode_read_block_map(struct inode* inode, u32* map)
 	
 	// if there are no blocks, don't continue
 	if( nblocks == 0 ){
-		map[0] = 0;
+		if( map ) map[0] = 0;
 		return 0;
 	}
 	

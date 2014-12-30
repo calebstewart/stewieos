@@ -1,3 +1,4 @@
 **/*.o
 stewieos-current
 **/bin/
+stewieos.dd

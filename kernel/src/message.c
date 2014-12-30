@@ -55,11 +55,12 @@ int sys_message_pop(message_t* message, unsigned int id, unsigned int flags)
 	
 	// no messages to return
 	if( list_empty(&current->t_mesgq.queue) ){
+		spin_unlock(&current->t_mesgq.lock);
 		if( flags & MESG_POP_WAIT ){
 			// when we wake up we will have a message
 			task_wait(current, TF_WAITMESG);
+			spin_lock(&current->t_mesgq.lock);
 		} else {
-			spin_unlock(&current->t_mesgq.lock);
 			return 0;
 		}
 	}

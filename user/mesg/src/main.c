@@ -11,18 +11,19 @@ int main(int argc, char** argv)
 	char c = 'H';
 	message_t* message = message_alloc();
 	
-	
 	child = fork();
 	if( child == 0 )
 	{
-		printf("Hello, I am the child.\n I'm going to let the parent say hello.\n");
+		printf("Hello, I am the child.\n");
 		message_send(parent, 0, &c, 1);
+		printf("I sent the parent a message!\n");
 		message_pop(message, MESG_ANY, MESG_POP_WAIT);
 		printf("Well, that was fun. Goodbye!\n");
 		exit(0);
 	} else {
 		message_pop(message, MESG_ANY, MESG_POP_WAIT);
 		printf("I am the parent. I guess I can speak now...\n");
+		message_send(child, 0, &c, 1);
 		int status = 0;
 		waitpid(child, &status, 0);
 		printf("My kid is done, so I'm going to go.\n");

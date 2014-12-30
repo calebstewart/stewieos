@@ -101,6 +101,7 @@ struct file* file_open(struct path* path, int flags)
 	}
 	
 	file->f_status = flags;
+	file->f_refs = 1;
 	
 	return file;
 }

@@ -261,6 +261,10 @@ static void heap_insert_hole(struct header* header)
 
 void* heap_kmalloc(size_t size, u32* phys, int align)
 {
+	if( size == 0 ){
+		return NULL;
+	}
+	
 	struct header* header = heap_find_hole(size+sizeof(struct header)+sizeof(struct footer), align);
 	if(!header)
 	{
@@ -374,7 +378,8 @@ static struct header* heap_merge_prev(struct header* header)
 	struct footer* prev_foot = (struct footer*)(((u32)header) - sizeof(struct footer));
 	// previous block is invalid, can't safely merge
 	if( prev_foot->magic != STEWIEOS_HEAP_MAGIC ){
-		printk("%2Vheap_merge_prev: corrupted heap footer magic number for footer %p.\n", prev_foot);
+		syslog(KERN_ERR, "heap_merge_prev: corrupt footer at 0x%p (magic=0x%X).", prev_foot, prev_foot->magic);
+		syslog(KERN_ERR, "heap_merge_prev: possible header for corrupt foot: 0x%p.", prev_foot->header);
 		return header;
 	}
 	struct header* prev_head = prev_foot->header;
@@ -404,6 +409,10 @@ static struct header* heap_merge_prev(struct header* header)
 
 void heap_kfree(void* data)
 {
+	if( data == NULL ){
+		return;
+	}
+	
 	struct header* header = ((struct header*)( (char*)(data) - sizeof(struct header) ));
 	
 	if( (u32)header == 0xe000fab8 ){
