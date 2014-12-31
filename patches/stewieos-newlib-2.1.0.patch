@@ -33117,20 +33117,24 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/configure.in ./original/new
 -AC_OUTPUT
 \ No newline at end of file
 diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S ./original/newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S
---- ./newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S	2014-12-16 13:04:59.054312002 -0500
+--- ./newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S	2014-12-25 12:54:17.230159138 -0500
 +++ ./original/newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S	1969-12-31 19:00:00.000000000 -0500
-@@ -1,40 +0,0 @@
+@@ -1,44 +0,0 @@
 -.global _start
 -.extern main
 -.extern exit
 -.extern environ
+-.extern _init_signal
 -.globl open
 -
 -screen_name: .string "/dev/vtty"
 -keyboard_name: .string "/dev/vtty"
 -
 -_start:
--	# Open /dev/screen for the output
+-	# Setup local signal handling
+-	call _init_signal
+-
+-/*	# Open /dev/screen for the output
 -	pushl $0
 -	pushl $0
 -	pushl $keyboard_name
@@ -33146,7 +33150,7 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/crt0.S ./original/newlib-2.
 -	pushl $screen_name
 -	call open
 -	# Remove the parameters
--	addl $36,%esp
+-	addl $36,%esp*/
 -	
 -	movl 0x8(%esp),%eax
 -	movl %eax,environ
@@ -34204,6 +34208,51 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/dirent.h ./original/new
 -long telldir(DIR* dirp);
 -
 -#endif
+diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/message.h ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/message.h
+--- ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/message.h	2014-12-24 23:17:23.291976806 -0500
++++ ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/message.h	1969-12-31 19:00:00.000000000 -0500
+@@ -1,40 +0,0 @@
+-#ifndef _STEWIEOS_MESSAGE_H_
+-#define _STEWIEOS_MESSAGE_H_
+-
+-#include <sys/types.h>
+-
+-#define MESG_MAX_LENGTH 512
+-
+-enum message_type
+-{
+-	MESG_LORESV = 0xFFFFF000,
+-	MESG_QUIT,
+-	MESG_ANY = 0xFFFFFFFF,
+-	MESG_HIRESV = 0xFFFFFFFF,
+-};
+-
+-enum _pop_flags
+-{
+-	MESG_POP_DEFAULT = 0x00000000, 
+-	MESG_POP_LEAVE = 0x00000001, // leave the message on the queue
+-	MESG_POP_WAIT = 0x00000002, // wait until a message is recieved to return
+-};
+-
+-typedef struct message
+-{
+-	pid_t from;
+-	unsigned int id;
+-	size_t length;
+-	char data[0];
+-} message_t;
+-
+-// Allocate a message buffer to use with message_peek
+-message_t* message_alloc( void );
+-// Free a message buffer
+-int message_free(message_t* message);
+-// Pop a message from this tasks queue
+-int message_pop(message_t* buffer, unsigned int type_mask, unsigned int flags);
+-// Send a message to another process
+-int message_send(pid_t to, unsigned int type, const char* data, size_t length);
+-
+-#endif /* ifdef _STEWIEOS_MESSAGE_H_ */
+\ No newline at end of file
 diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/module.h ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/module.h
 --- ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/module.h	2014-11-03 21:29:29.864358609 -0500
 +++ ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/module.h	1969-12-31 19:00:00.000000000 -0500
@@ -34238,9 +34287,9 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/mount.h ./original/newl
 -#endif
 \ No newline at end of file
 diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h
---- ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h	2014-12-16 12:55:27.678310510 -0500
+--- ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h	2014-12-24 23:19:08.451974460 -0500
 +++ ./original/newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h	1969-12-31 19:00:00.000000000 -0500
-@@ -1,48 +0,0 @@
+@@ -1,50 +0,0 @@
 -#ifndef _STEWIEOS_SYSCALL_H_
 -#define _STEWIEOS_SYSCALL_H_
 -
@@ -34278,6 +34327,8 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/syscall.h ./original/ne
 -	SYSCALL_GETCWD,
 -	SYSCALL_SHUTDOWN,
 -	SYSCALL_DETACH,
+-	SYSCALL_MESG_SEND,
+-	SYSCALL_MESG_POP,
 -	SYSCALL_COUNT
 -};
 -
@@ -34510,21 +34561,23 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/sys/wait.h ./original/newli
 -#endif
 \ No newline at end of file
 diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c ./original/newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c
---- ./newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c	2014-12-16 12:56:19.026310644 -0500
+--- ./newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c	2014-12-25 10:18:44.518134758 -0500
 +++ ./original/newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c	1969-12-31 19:00:00.000000000 -0500
-@@ -1,355 +0,0 @@
+@@ -1,395 +0,0 @@
 -#define _GNU_SOURCE
 -#include <sys/stat.h>
 -#include <sys/types.h>
 -#include <sys/fcntl.h>
 -#include <sys/times.h>
--#include <sys/errno.h>
+-//#include <sys/errno.h>
+-#include <errno.h>
 -#include <sys/time.h>
 -#include <stdio.h>
 -#include <sys/syscall.h>
 -#include <stdarg.h>
 -#include <sys/wait.h>
 -#include <sys/dirent.h>
+-#include <sys/message.h>
 -
 -/* pointer to array of char * strings that define the current
 - *	environment variables */
@@ -34764,11 +34817,15 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c ./original/newli
 -{
 -	int fd = open(name, /*O_DIRECTORY |*/ O_RDONLY);
 -	
--	if( fd < 0 ){ 
+-	if( fd < 0 ){
 -		return NULL;
 -	}
 -	
 -	DIR* dir = (DIR*)malloc(sizeof(DIR));
+-	if( !dir ){
+-		errno = -ENOMEM;
+-		return NULL;
+-	}
 -	dir->fd = fd;
 -	
 -	return dir;
@@ -34862,6 +34919,40 @@ diff -ENwbur ./newlib-2.1.0/newlib/libc/sys/stewieos/syscalls.c ./original/newli
 -{
 -	int result = 0;
 -	SYSCALL2(SYSCALL_ACCESS, result, pathname, mode);
+-	errno = -result;
+-	if( result < 0 ){
+-		return -1;
+-	}
+-	return 0;
+-}
+-
+-message_t* message_alloc( void )
+-{
+-	return (message_t*)malloc(MESG_MAX_LENGTH + sizeof(message_t));
+-}
+-
+-int message_free(message_t* message)
+-{
+-	free(message);
+-	return 0;
+-}
+-
+-int message_pop(message_t* mesg, unsigned int type, unsigned int flags)
+-{
+-	int result = 0;
+-	SYSCALL3(SYSCALL_MESG_POP, result, mesg, type, flags);
+-	if( result < 0 ){
+-		errno = result;
+-		return -1;
+-	}
+-	errno = 0;
+-	return result;
+-}
+-
+-int message_send(pid_t where, unsigned int type, const char* data, size_t length)
+-{
+-	int result = 0;
+-	SYSCALL4(SYSCALL_MESG_SEND, result, where, type, data, length);
 -	errno = -result;
 -	if( result < 0 ){
 -		return -1;
