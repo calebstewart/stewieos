@@ -1,6 +1,8 @@
 #include "builtin.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
 builtin_command_t builtin_command[] = {
 	{ .name = "cd",		.func = builtin_chdir	},

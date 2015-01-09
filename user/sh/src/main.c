@@ -8,7 +8,8 @@
 #include <string.h>
 #include "builtin.h"
 #include "slre/slre.h"
-#include "readline/readline.h"
+#include <string.h>
+//#include "readline/readline.h"
 
 int shell_exit = 0;
 
@@ -192,6 +193,7 @@ void shell(FILE* outfl, FILE* filp, char** envp)
 		}
 		
 		argc = 0;
+		iter = 0;
 		while( iter < length && (result = slre_match(regex, line+iter, length-iter, match, 2, 0)) > 0 ){
 			argc++;
 			iter += result;
@@ -223,6 +225,13 @@ void shell(FILE* outfl, FILE* filp, char** envp)
 			argv[i] = (char*)match[0].ptr;
 			argv[i][match[0].len] = 0;
 			iter += (match[0].len+1);
+			
+			if( argv[i][0] == '"' || argv[i][0] == '\'' ){
+				remove_character(argv[i]);
+				argv[i][strlen(argv[i])-1] = 0;
+			}
+			
+			i++;
 		}
 		
 		// Iterate over all parameters setting spaces to null and assigning 
