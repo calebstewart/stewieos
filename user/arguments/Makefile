@@ -1,9 +1,9 @@
-SOURCES:=src/main.c src/builtin.c src/slre/slre.c
+SOURCES:=src/main.c
 OBJECTS:=$(SOURCES:.c=.o)
 CFLAGS:=-g -static -std=gnu11
 LDFLAGS:=
-PROJECT_NAME:=sh
-#([^ ]+?) ((("[^" ]+?"|'[^' ]+?'|[^'" ]+?)[ ]{0,1}?){0,50}?)
+PROJECT_NAME:=arguments
+
 .PHONY: all install clean
 
 all: bin/$(PROJECT_NAME)
