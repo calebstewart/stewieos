@@ -60,11 +60,27 @@ static vkey_t sc_to_vkey[128] = {
 	KEY_KPERIOD, 0, 0, 0, KEY_F11, KEY_F12
 };
 
+static vkey_t multi_sc_to_vkey[256] = {
+	[0x1C]=KEY_KENTER, [0x1D] = KEY_RIGHTCTRL, [0x35] = KEY_SLASH, [0x38] = KEY_RIGHTALT, [0x47] = KEY_HOME,
+	[0x48] = KEY_CURSORUP, [0x49] = KEY_PAGEUP, [0x4B] = KEY_CURSORLEFT, [0x4D] = KEY_CURSORRIGHT,
+	[0x4F] = KEY_END, [0x50] = KEY_CURSORDOWN, [0x51] = KEY_PAGEDOWN, [0x52] = KEY_INSERT,
+	[0x53] = KEY_DELETE, [0x5B] = KEY_LEFTGUI, [0x5C] = KEY_RIGHTGUI, [0x5D] = KEY_APPS,
+	[0x37] = KEY_PRINTSCREEN, [0xC5] = KEY_PAUSE
+};
+
+static char multibyte_scancode = 0;
+
 vkey_t scancode_convert( u8 sc )
 {
 	if( sc >= 128 ){
 		return KEY_UNKNOWN;
 	}
+	
+	if( multibyte_scancode ){
+		multibyte_scancode = 0;
+		return multi_sc_to_vkey[sc];
+	}
+		
 	return sc_to_vkey[sc];
 }
 
@@ -166,6 +182,12 @@ void kbd_int(struct regs* regs __attribute__((unused)))
 {
 	u8 sc = inb(PS2_DATA);
 	u8 state = ((sc & 0x80) == 0); // 1 is pressed, 0 is released
+	// we need to wait on the next byte
+	if( sc == 0xE0 && multibyte_scancode == 0 )
+	{
+		multibyte_scancode = 1;
+		return;
+	}
 	sc = sc & 0x7f;
 	vkey_t vk = scancode_convert(sc);
 	
