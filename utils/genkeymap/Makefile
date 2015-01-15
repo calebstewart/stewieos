@@ -1,0 +1,12 @@
+SOURCE:=main.c
+OBJECTS:=$(SOURCE:.c=.o)
+OUTPUT_FILE:=genkeymap
+
+CFLAGS=
+LDFLAGS=
+
+CC=gcc
+LD=gcc
+
+OUTPUT_FILE: $(OBJECTS)
+	$(LD) -o $(OUTPUT_FILE) $(OBJECTS) $(LDFLAGS)
