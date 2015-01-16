@@ -4,6 +4,21 @@
 #include <string.h>
 #include <stdlib.h>
 
+static void read_line(FILE* filp, char* buffer, size_t max)
+{
+	size_t n = 0;
+	char c = 0;
+	while( !feof(filp) && n < (max-1) && c != '\n' ){
+		c = fgetc(filp);
+		buffer[n] = c;
+		n++;
+	}
+	if( c == '\n' || c == -1 ){
+		buffer[n-1] = 0;
+	}
+	buffer[n] = 0;
+}
+
 int main(int argc, char** argv)
 {
 	FILE* modfile = NULL;
@@ -14,6 +29,29 @@ int main(int argc, char** argv)
 	pid_t pid = 0;
 	
 	printf("INIT: started with pid %d.\n", getpid());
+	
+	FILE* modules = fopen("/etc/modules.conf", "r");
+	
+	while( !feof(modules) )
+	{
+		read_line(modules, module_line, 1024);
+		if( strlen(module_line) == 0 ){
+			continue;
+		}
+		
+		if( module_line[0] == '#' ){
+			continue;
+		}
+		
+		result = insmod(module_line);
+		if( result == -1 ){
+			printf("error: unable to load module %s: %d\n", module_line, errno);
+			errno = 0;
+		} else {
+			printf("INIT: loaded module %s.\n", module_line);
+		}
+		
+	}
 	
 	pid = fork();
 	if( pid < 0 ){
