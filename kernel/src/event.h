@@ -4,6 +4,13 @@
 #include "kernel.h"
 #include "linkedlist.h"
 
+enum _event_type
+{
+	ET_KEY = (1<<0),
+	ET_ABS = (1<<1),
+	ET_REL = (1<<2),
+};
+
 /* Event information structure */
 typedef struct _event
 {
@@ -28,5 +35,7 @@ typedef struct _event_handler
 int event_raise(u32 type, u32 event, void* data);
 /* Register an event handler function */
 int event_listen(u32 mask, event_handler_func_t event, void* data);
+/* Remove a previous listen registration */
+int event_unlisten(u32 mask, event_handler_func_t event);
 
 #endif

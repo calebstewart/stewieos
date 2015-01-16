@@ -69,3 +69,22 @@ int event_listen(u32 mask, event_handler_func_t handler_func, void* data)
 	
 	return 0;
 }
+
+int event_unlisten(u32 mask, event_handler_func_t handler_func)
+{
+	if( mask == 0 ){
+		return -1;
+	}
+	
+	list_t* iter;
+	
+	list_for_each(iter, &event_handlers){
+		event_handler_t* handler = list_entry(iter, event_handler_t, eh_link);
+		if( handler->eh_mask == mask && handler->eh_event == handler_func ){
+			list_rem(iter);
+			return 0;
+		}
+	}
+	
+	return -1;
+}
