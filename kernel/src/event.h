@@ -2,6 +2,7 @@
 #define _STEWIEOS_EVENT_H_
 
 #include "kernel.h"
+#include "linkedlist.h"
 
 /* Event information structure */
 typedef struct _event
