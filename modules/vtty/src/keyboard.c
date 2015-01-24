@@ -3,8 +3,10 @@
 #include <error.h>
 #include <timer.h>
 #include "vtty.h"
+#include <ps2.h>
 
 void kbd_int(struct regs* regs);
+void kbd_listen(u8 port, u8 sc);
 u8 kbd_recv( void );
 void kbd_send(u8 data);
 void ps2_cmd(u8 command);
@@ -69,6 +71,7 @@ static vkey_t multi_sc_to_vkey[256] = {
 };
 
 static char multibyte_scancode = 0;
+static ps2_listener_t* ps2_listener = NULL;
 
 vkey_t scancode_convert( u8 sc )
 {
@@ -101,45 +104,48 @@ char vkey_convert(vkey_t key, const char* map)
 
 int keyboard_init(module_t* module __attribute__((unused)), tty_device_t* device __attribute__((unused)))
 {
-	outb(PS2_COMMAND, 0xAD); 		// disable ps2 device 1
-	outb(PS2_COMMAND, 0xA7); 		// disable ps2 device 2
-	inb(PS2_DATA); 				// ignore any floating input data
-	outb(PS2_COMMAND, 0x20); 		// Ask for the configuration byte
-	while( !(inb(PS2_STATUS) & 1) );	// wait for the data
-	u8 cfg = inb(PS2_DATA); 		// read the configuration byte
-	cfg &= (u8)(~(1 | 2 | 32));			// Clear bits 0, 1, and 6 (decimal 1, 2, and 32)
-	outb(PS2_COMMAND, 0x60);		// Ask to write the configuration byte
-	while( (inb(PS2_STATUS) & 2) != 0 );	// Wait for the controller to be ready
-	outb(PS2_DATA, cfg);			// Write the configuration byte
-	outb(PS2_COMMAND, 0xAA);		// Perform controller self-test
-	while( !(inb(PS2_STATUS) & 1) );	// Wait for the data
-	u8 result = inb(PS2_DATA);		// Get the response
-	if( result != 0x55 ){			// Bad self-test
-		return -ENXIO;
-	}
-	outb(PS2_COMMAND, 0xAB);		// Perform First Port Test
-	while( !(inb(PS2_STATUS) & 1) );	// Wait for response
-	result = inb(PS2_DATA);
-	if( result != 0 ){			// Bad self-test
-		return -ENXIO;
-	}
-	outb(PS2_COMMAND, 0xAE);		// Enable first port
-	outb(PS2_COMMAND, 0x20);		// Ask for configuration byte
-	while( !(inb(PS2_STATUS) & 1) );	// wait for data
-	cfg = inb(PS2_DATA);			// get the configuration data
-	cfg |= 1;				// Enable interrupts for first port (bit 0)
-	outb(PS2_COMMAND, 0x60);		// Write configuration byte
-	while( (inb(PS2_STATUS) & 2) != 0 );	// Wait for controller to be ready
-	outb(PS2_DATA, cfg);			// Write the byte
+// 	outb(PS2_COMMAND, 0xAD); 		// disable ps2 device 1
+// 	outb(PS2_COMMAND, 0xA7); 		// disable ps2 device 2
+// 	inb(PS2_DATA); 				// ignore any floating input data
+// 	outb(PS2_COMMAND, 0x20); 		// Ask for the configuration byte
+// 	while( !(inb(PS2_STATUS) & 1) );	// wait for the data
+// 	u8 cfg = inb(PS2_DATA); 		// read the configuration byte
+// 	cfg &= (u8)(~(1 | 2 | 32));			// Clear bits 0, 1, and 6 (decimal 1, 2, and 32)
+// 	outb(PS2_COMMAND, 0x60);		// Ask to write the configuration byte
+// 	while( (inb(PS2_STATUS) & 2) != 0 );	// Wait for the controller to be ready
+// 	outb(PS2_DATA, cfg);			// Write the configuration byte
+// 	outb(PS2_COMMAND, 0xAA);		// Perform controller self-test
+// 	while( !(inb(PS2_STATUS) & 1) );	// Wait for the data
+// 	u8 result = inb(PS2_DATA);		// Get the response
+// 	if( result != 0x55 ){			// Bad self-test
+// 		return -ENXIO;
+// 	}
+// 	outb(PS2_COMMAND, 0xAB);		// Perform First Port Test
+// 	while( !(inb(PS2_STATUS) & 1) );	// Wait for response
+// 	result = inb(PS2_DATA);
+// 	if( result != 0 ){			// Bad self-test
+// 		return -ENXIO;
+// 	}
+// 	outb(PS2_COMMAND, 0xAE);		// Enable first port
+// 	outb(PS2_COMMAND, 0x20);		// Ask for configuration byte
+// 	while( !(inb(PS2_STATUS) & 1) );	// wait for data
+// 	cfg = inb(PS2_DATA);			// get the configuration data
+// 	cfg |= 1;				// Enable interrupts for first port (bit 0)
+// 	outb(PS2_COMMAND, 0x60);		// Write configuration byte
+// 	while( (inb(PS2_STATUS) & 2) != 0 );	// Wait for controller to be ready
+// 	outb(PS2_DATA, cfg);			// Write the byte
+// 	
+// 	register_interrupt(IRQ1, kbd_int);
 	
-	register_interrupt(IRQ1, kbd_int);
+	ps2_listener = ps2_listen(PS2_PORT1, kbd_listen);
 	
 	return 0;
 }
 
 int keyboard_quit(module_t* module __attribute__((unused)))
 {
-	unregister_interrupt(IRQ1);
+	ps2_unlisten(ps2_listener);
+	//unregister_interrupt(IRQ1);
 	return 0;
 }
 
@@ -176,6 +182,44 @@ u8 kbd_recv( void )
 	}
 	
 	return inb(PS2_DATA);
+}
+
+void kbd_listen(u8 port ATTR((unused)), u8 sc)
+{
+	//u8 sc = inb(PS2_DATA);
+	u8 state = ((sc & 0x80) == 0); // 1 is pressed, 0 is released
+	// we need to wait on the next byte
+	if( sc == 0xE0 && multibyte_scancode == 0 )
+	{
+		multibyte_scancode = 1;
+		return;
+	}
+	sc = sc & 0x7f;
+	vkey_t vk = scancode_convert(sc);
+	
+	if( vk == KEY_UNKNOWN ){
+		return;
+	}
+	
+	if( state == 1 )
+	{
+		char c = vkey_convert(vk, keymap);
+		if( c != 0 )
+		{
+			tty_driver_t* driver = tty_find_driver(VTTY_MAJOR);
+			tty_device_t* device = &driver->device[0];
+			
+			tty_queue_insert(device, c);
+		}
+	}
+	
+	if( vk == KEY_CAPSLOCK || vk == KEY_NUMLOCK || vk == KEY_SCRLOCK ){
+		if( state == 1 ){
+			keymap[vk] = !keymap[vk];
+		}
+	} else {
+		keymap[vk] = state;
+	}
 }
 
 void kbd_int(struct regs* regs __attribute__((unused)))

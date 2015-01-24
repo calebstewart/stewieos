@@ -26,6 +26,7 @@
 #include "cmos.h"
 #include "ext2fs/ext2.h"
 #include "syslog.h"
+#include "ps2.h"
 
 int initfs_install(multiboot_info_t* mb);
 
@@ -55,6 +56,9 @@ int kmain( multiboot_info_t* mb )
 	
 	printk("Initializing multitasking subsystem... \n");
 	task_init();
+	
+	printk("Initializing PS/2 Layer...\n");
+	ps2_init();
 	
 	printk("Registering elf32 executable type... \n");
 	elf_register();
