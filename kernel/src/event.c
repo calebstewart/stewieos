@@ -16,9 +16,12 @@ static inline int _count_bits(u32 a)
 	return result;
 }
 
-int event_raise(u32 type, u32 event_code, void* data)
+int event_raise(u32 type, u32 event_code, void* data, size_t length)
 {
 	if( _count_bits(type) != 1 ){
+		return -EINVAL;
+	}
+	if( length == 0 ){
 		return -EINVAL;
 	}
 	
@@ -26,8 +29,17 @@ int event_raise(u32 type, u32 event_code, void* data)
 	event_t event = {
 		.ev_type = type,
 		.ev_event = event_code,
-		.ev_data = data,
+		.ev_data = kmalloc(length),
+		.ev_length = length
 	};
+	
+	// check if we were able to allocate the data
+	if( event.ev_data == NULL ){
+		return -ENOMEM;
+	}
+	
+	// copy the data into the structure
+	memcpy(event.ev_data, data, length);
 	
 	list_for_each(iter, &event_handlers){
 		event_handler_t* handler = list_entry(iter, event_handler_t, eh_link);
@@ -35,6 +47,10 @@ int event_raise(u32 type, u32 event_code, void* data)
 			handler->eh_event(&event, handler->eh_data);
 		}
 	}
+	
+	// free the event data
+	kfree(event.ev_data);
+	event.ev_length = 0;
 	
 	return 0;
 }

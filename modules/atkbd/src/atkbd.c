@@ -13,7 +13,7 @@ void kbd_event(u8 port ATTR((unused)), u8 sc)
 		atkbd_scancode = sc;
 		atkbd_multibyte = 1;
 		return;
-	} else if( atkbd_multibyte && (sc == 0x2A || sc == 0xB7 || sc == 0x1D || sc == 0x45 || sc == 0x9D)  ){
+	} else if( atkbd_multibyte && (sc == 0x2A || sc == 0xB7 || sc == 0x1D || sc == 0x45 || sc == 0x9D)  ){ // these bytes mean it is a 3-byte scancode
 		atkbd_scancode = (atkbd_scancode << 8) | sc;
 		return;
 	}

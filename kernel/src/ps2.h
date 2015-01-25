@@ -8,6 +8,10 @@
 #define PS2_STAT 0x64
 #define PS2_CMD  0x64
 
+// PS2 Acknowledge response
+#define PS2_ACK			0xFA
+#define PS2_RESEND		0xFE
+
 // Status Register Bits
 #define PS2_STAT_OUTPUT		(1<<0) /* Is PS2_DATA full and ready to be read from? */
 #define PS2_STAT_INPUT		(1<<1) /* Are PS2_DATA and PS2_CMD clear and ready to be written to? */
@@ -29,6 +33,8 @@
 #define PS2_CFG_TRN2		(1<<6)	/* First PS/2 Port Translation */
 #define PS2_CFG_ZER1		(1<<7)	/* Must be zero */
 
+#define PS2_CFG_INT(p)		( (p) == PS2_PORT1 ? PS2_CFG_INT1 : ( (p) == PS2_PORT2 ? PS2_CFG_INT2 : 0 ) )
+
 // PS/2 Controller Output Port
 #define PS2_OUT_RST		(1<<0)	/* Always '1', pulse using PS2_CMD_RST */
 #define PS2_OUT_A20		(1<<1)	/* A20 Gate */
@@ -40,15 +46,19 @@
 #define PS2_OUT_DAT1		(1<<6)	/* First PS/2 Port Data */
 
 // PS/2 Identify Results
-#define PS2_DEV_MOUSE		0x00	/* Standard PS/2 Mouse */
-#define PS2_DEV_EXT_MOUSE	0x03	/* Mouse with scroll wheel */
-#define PS2_DEV_MOUSE5		0x04	/* 5-button Mouse */
-#define PS2_DEV_MF2_TRANS0	0xAB	/* MF2 Keyboard With Controller Translation */
-#define PS2_DEV_MF2_TRANS1	0x41	/* Same as above */
-#define PS2_DEV_MF2_TRANS2	0xAB	/* Same as above */
-#define PS2_DEV_MF2_TRANS3	0xC1	/* Same as above */
-#define PS2_DEV_MF2_STD0	0xAB	/* MF2 Keyboard */
-#define PS2_DEV_MF2_STD1	0x83	/* Same as above */
+#define PS2_DEV_MOUSE		0x0000	/* Standard PS/2 Mouse */
+#define PS2_DEV_SCRLMOUSE	0x0300	/* Mouse with scroll wheel */
+#define PS2_DEV_5BTNMOUSE		0x0400	/* 5-button Mouse */
+#define PS2_DEV_TRKEYBOARD1	0xAB41	/* MF2 Keyboard With Controller Translation */
+#define PS2_DEV_TRKEYBOARD2	0xABC1	/* Same as above */
+#define PS2_DEV_KEYBOARD	0xAB83	/* MF2 Keyboard */
+#define PS2_DEV_NONE		0xFFFF	/* Either no device is attached or there was an input error */
+
+#define PS2_IS_KBD(id)		(id == PS2_DEV_TRKEYBOARD1 || id == PS2_DEV_TRKEYBOARD2 \
+					|| id == PS2_DEV_KEYBOARD )
+#define PS2_IS_MOUSE(id)	(id == PS2_DEV_MOUSE || id == PS2_DEV_SCRLMOUSE \
+					|| id == PS2_DEV_5BTNMOUSE )
+
 
 // PS2 Controller Commands
 #define PS2_CMD_READ		0x20	/* Read byte N from internal RAM (configuration byte) */
@@ -139,6 +149,8 @@ u8 ps2_reset( u8 port );
 void ps2_init( void );
 // Poll until the given buffer is empty
 u8 ps2_poll(u8 buffer);
+// Retrieve the identification from the PS/2 Device
+u16 ps2_identify(u8 port);
 
 ps2_listener_t* ps2_listen(u8 port, ps2_device_listener_t listener);
 void ps2_unlisten(ps2_listener_t* listener);

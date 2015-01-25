@@ -4,9 +4,10 @@
 #include <timer.h>
 #include "vtty.h"
 #include <ps2.h>
+#include <event.h>
 
 void kbd_int(struct regs* regs);
-void kbd_listen(u8 port, u8 sc);
+void kbd_listen(event_t* event, void* data);
 u8 kbd_recv( void );
 void kbd_send(u8 data);
 void ps2_cmd(u8 command);
@@ -137,7 +138,8 @@ int keyboard_init(module_t* module __attribute__((unused)), tty_device_t* device
 // 	
 // 	register_interrupt(IRQ1, kbd_int);
 	
-	ps2_listener = ps2_listen(PS2_PORT1, kbd_listen);
+	event_listen(ET_KEY, kbd_listen, NULL);
+	//ps2_listener = ps2_listen(PS2_PORT1, kbd_listen);
 	
 	return 0;
 }
@@ -184,24 +186,24 @@ u8 kbd_recv( void )
 	return inb(PS2_DATA);
 }
 
-void kbd_listen(u8 port ATTR((unused)), u8 sc)
+void kbd_listen(event_t* event, void* data ATTR((unused)))
 {
-	//u8 sc = inb(PS2_DATA);
-	u8 state = ((sc & 0x80) == 0); // 1 is pressed, 0 is released
-	// we need to wait on the next byte
-	if( sc == 0xE0 && multibyte_scancode == 0 )
-	{
-		multibyte_scancode = 1;
+	// Get the key event data
+	key_event_t* key = (key_event_t*)event->ev_data;
+	
+	// This is a multibyte scancode
+	if( (key->scancode & 0xE000) || (key->scancode & 0xE00000) || (key->scancode & 0xE10000) ) {
 		return;
 	}
-	sc = sc & 0x7f;
-	vkey_t vk = scancode_convert(sc);
+	
+	// convert the scancode to a virtual key code
+	vkey_t vk = scancode_convert((u8)(key->scancode & 0xFF));
 	
 	if( vk == KEY_UNKNOWN ){
 		return;
 	}
 	
-	if( state == 1 )
+	if( key->state == KEY_PRESSED )
 	{
 		char c = vkey_convert(vk, keymap);
 		if( c != 0 )
@@ -214,11 +216,11 @@ void kbd_listen(u8 port ATTR((unused)), u8 sc)
 	}
 	
 	if( vk == KEY_CAPSLOCK || vk == KEY_NUMLOCK || vk == KEY_SCRLOCK ){
-		if( state == 1 ){
+		if( key->state == KEY_PRESSED ){
 			keymap[vk] = !keymap[vk];
 		}
 	} else {
-		keymap[vk] = state;
+		keymap[vk] = key->state;
 	}
 }
 
