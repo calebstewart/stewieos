@@ -3,6 +3,7 @@
 
 #include "kernel.h"
 #include "linkedlist.h"
+#include "keys.h"
 
 enum _event_type
 {
@@ -27,6 +28,7 @@ enum _key_state
 typedef struct _key_event
 {
 	u32 scancode;
+	vkey_t key;
 	u8 state;
 } key_event_t;
 

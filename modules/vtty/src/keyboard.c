@@ -191,21 +191,21 @@ void kbd_listen(event_t* event, void* data ATTR((unused)))
 	// Get the key event data
 	key_event_t* key = (key_event_t*)event->ev_data;
 	
-	// This is a multibyte scancode
-	if( (key->scancode & 0xE000) || (key->scancode & 0xE00000) || (key->scancode & 0xE10000) ) {
-		return;
-	}
+// 	// This is a multibyte scancode
+// 	if( (key->scancode & 0xE000) || (key->scancode & 0xE00000) || (key->scancode & 0xE10000) ) {
+// 		return;
+// 	}
+// 	
+// 	// convert the scancode to a virtual key code
+// 	vkey_t vk = scancode_convert((u8)(key->scancode & 0xFF));
 	
-	// convert the scancode to a virtual key code
-	vkey_t vk = scancode_convert((u8)(key->scancode & 0xFF));
-	
-	if( vk == KEY_UNKNOWN ){
+	if( key->key == KEY_UNKNOWN ){
 		return;
 	}
 	
 	if( key->state == KEY_PRESSED )
 	{
-		char c = vkey_convert(vk, keymap);
+		char c = vkey_convert(key->key, keymap);
 		if( c != 0 )
 		{
 			tty_driver_t* driver = tty_find_driver(VTTY_MAJOR);
@@ -215,12 +215,12 @@ void kbd_listen(event_t* event, void* data ATTR((unused)))
 		}
 	}
 	
-	if( vk == KEY_CAPSLOCK || vk == KEY_NUMLOCK || vk == KEY_SCRLOCK ){
+	if( key->key == KEY_CAPSLOCK || key->key == KEY_NUMLOCK || key == KEY_SCRLOCK ){
 		if( key->state == KEY_PRESSED ){
-			keymap[vk] = !keymap[vk];
+			keymap[key->key] = !keymap[key->key];
 		}
 	} else {
-		keymap[vk] = key->state;
+		keymap[key->key] = key->state;
 	}
 }
 

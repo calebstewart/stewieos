@@ -39,10 +39,10 @@ int keyboard_load(module_t* module ATTR((unused)))
 // 	ps2_send_data(kbd_port, 0xED);
 // 	ps2_send_data(kbd_port, 0x00);
 // 	ps2_read_data( );
-	// Set the scancode set to Scancode Set 2
-	ps2_send_data(kbd_port, 0xF0);
+	// Set the scancode set to Scancode Set 1
+	ps2_send_data(kbd_port, ATKBD_SET_SCANCODE);
 	ps2_read_data( );
-	ps2_send_data(kbd_port, 0x01);
+	ps2_send_data(kbd_port, ATKBD_SCANCODE_SET2);
 	// Re-enable interrupts
 	ps2_config(PS2_CFG_INT(kbd_port), 0);
 	ps2_enable(kbd_port);
