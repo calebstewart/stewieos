@@ -10,13 +10,13 @@ enum _event_type
 	ET_KEY = (1<<0),
 	ET_ABS = (1<<1),
 	ET_REL = (1<<2),
+	ET_LED = (1<<3),
 };
 
-enum _key_events
+enum _led_events
 {
-	EVENT_KEYUP,
-	EVENT_KEYDOWN,
-	EVENT_SCANCODE
+	LED_CAPSLOCK,
+	LED_NUMLOCK,
 };
 
 enum _key_state
@@ -37,8 +37,7 @@ typedef struct _event
 {
 	u32 ev_type; // event type
 	u32 ev_event; // event code
-	void* ev_data; // event data
-	size_t ev_length; // length of the data argument
+	u32 ev_value; // event data
 } event_t;
 
 /* Event handler event notification function */
@@ -54,7 +53,7 @@ typedef struct _event_handler
 } event_handler_t;
 
 /* Raise a system event */
-int event_raise(u32 type, u32 event, void* data, size_t length);
+int event_raise(u32 type, u32 event, u32 value);
 /* Register an event handler function */
 int event_listen(u32 mask, event_handler_func_t event, void* data);
 /* Remove a previous listen registration */

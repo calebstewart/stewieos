@@ -17,7 +17,7 @@ vkey_t single_scancode_map[0x84] = {
 	[0x2A] = KEY_V, [0x2B] = KEY_F, [0x2C] = KEY_T, [0x2D] = KEY_R, [0x2E] = KEY_5,
 	[0x31] = KEY_N, [0x32] = KEY_B, [0x33] = KEY_H, [0x34] = KEY_G, [0x35] = KEY_Y,
 	[0x36] = KEY_6, [0x3A] = KEY_M, [0x3B] = KEY_J, [0x3C] = KEY_U, [0x3D] = KEY_7,
-	[0x3E] = KEY_8, [0x41] = KEY_COMMA, [0x42] = KEY_K, [0x43] = KEY_L, [0x44] = KEY_O,
+	[0x3E] = KEY_8, [0x41] = KEY_COMMA, [0x42] = KEY_K, [0x43] = KEY_I, [0x44] = KEY_O,
 	[0x45] = KEY_0, [0x46] = KEY_9, [0x49] = KEY_PERIOD, [0x4A] = KEY_SLASH, [0x4B] = KEY_L,
 	[0x4C] = KEY_SEMICOLON, [0x4D] = KEY_P, [0x4E] = KEY_MINUS, [0x52] = KEY_SINGLEQUOTE,
 	[0x54] = KEY_LEFTBRACKET, [0x55] = KEY_EQUAL, [0x58] = KEY_CAPSLOCK,
@@ -79,17 +79,17 @@ void kbd_event(u8 port ATTR((unused)), u8 sc)
 		if( !atkbd_multibyte && atkbd_state == KEY_RELEASED ) scancode |= 0xF000;
 	}
 	
-	// Build the key event structure
-	key_event_t event = {
-		.scancode = scancode,
-		.key = key,
-		.state = atkbd_state,
-	};
+// 	// Build the key event structure
+// 	key_event_t event = {
+// 		.scancode = scancode,
+// 		.key = key,
+// 		.state = atkbd_state,
+// 	};
+	
+	// BROADCAST!
+	event_raise(ET_KEY, key, atkbd_state);
 	
 	// Reset the flags
 	atkbd_state = KEY_PRESSED;
 	atkbd_multibyte = 0;
-	
-	// BROADCAST!
-	event_raise(ET_KEY, EVENT_SCANCODE, &event, sizeof(event));
 }

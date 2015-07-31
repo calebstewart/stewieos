@@ -124,6 +124,7 @@ void task_init( void )
 	asm volatile("mov %0,%%ebp; mov %1,%%esp"::"r"(new_base), "r"(new_stack));
 	
 	list_add(&init->t_queue, &ready_tasks);
+	list_add(&init->t_globlink, &task_globlist);
 	current = init;
 }
 
@@ -392,31 +393,18 @@ void task_waitio(struct task* task)
 {
 	task_wait(task, TF_WAITIO);
 	return;
-// 	u32 eflags = disablei();
-// 	
-// 	// Set the wait io flag, and reschedule the task
-// 	list_rem(&task->t_queue);
-// 	task->t_flags |= (TF_WAITIO | TF_RESCHED);
-// 	schedule();
-// 	
-// 	restore(eflags);
 }
 
 void task_wakeup(struct task* task)
 {
-	//u32 eflags = disablei();
-	
 	// task is already awake
 	if( (task->t_flags & TF_WAITMASK) == 0 ){
-		//restore(eflags);
 		return;
 	}
 	
 	list_add(&task->t_queue, &ready_tasks);
 	task->t_flags &= ~(TF_WAITMASK | TF_RESCHED);
 	task->t_flags |= TF_RUNNING;
-	
-	//restore(eflags);
 }
 
 /* function: sys_sbrk
@@ -440,6 +428,100 @@ caddr_t sys_sbrk(int incr)
 	current->t_dataend = addr;
 	
 	return result;
+}
+
+pid_t task_spawn(int kern)
+{
+	struct task*	task = NULL;	// the new task structure
+	u32 		esp = 0,	// the current esp
+	ebp = 0;	// the current ebp
+	u32		eflags = 0;	// the saved eflags value
+	
+	// disable interrupts
+	eflags = disablei();
+	// allocate the task structure
+	task = (struct task*)kmalloc(sizeof(struct task));
+	memset(task, 0, sizeof(struct task));
+	
+	// grab the esp and ebp values
+	asm volatile("mov %%esp,%0" : "=r"(esp));
+	asm volatile("mov %%ebp,%0" : "=r"(ebp));
+	
+	// setup the initial values for the new task
+	task->t_pid = next_pid++;
+	task->t_flags  = 0;
+	task->t_esp = esp;
+	task->t_ebp = ebp;
+	INIT_LIST(&task->t_children);
+	INIT_LIST(&task->t_sibling);
+	INIT_LIST(&task->t_queue);
+	INIT_LIST(&task->t_globlink);
+	INIT_LIST(&task->t_ttywait);
+	INIT_LIST(&task->t_mesgq.queue);
+	spin_init(&task->t_mesgq.lock);
+	
+	if( !kern ){
+		task->t_parent = current;
+		copy_task_vfs(&task->t_vfs, &current->t_vfs);
+		// copy the page directory
+		task->t_dir = copy_page_dir(current->t_dir);
+	} else {
+		task->t_parent = NULL;
+		init_task_vfs(&task->t_vfs);
+		
+// 		syslog(KERN_WARN, "Current Page Directory");
+// 		display_page_dir(current->t_dir);
+// 		syslog(KERN_WARN, "Kernel Page Directory");
+// 		display_page_dir(kerndir);
+		
+		task->t_dir = copy_page_dir(current->t_dir);
+	}
+	
+	if( !task->t_dir ){
+		kfree(task);
+		restore(eflags);
+		return -1;
+	}
+	
+	// this is where the new task will start
+	u32 eip = read_eip();
+	
+	// we have already switched, so we must be the child (we just travelled back in time o.O)
+	if( eip == 0xDEADCABB ){
+		restore(eflags);
+		return 0;
+	}
+	// this means we are the parent, and we need to setup the child
+	
+	task->t_eip = eip;
+	
+	// link the task into the list
+	//	task->t_next = current->t_next;
+	//	current->t_next = task;
+	
+	// add the task just after the current task
+	list_add(&task->t_queue, &ready_tasks);
+	if( !kern ){
+		list_add(&task->t_sibling, &current->t_children);
+	}
+	list_add(&task->t_globlink, &task_globlist);
+	
+	task->t_eflags = eflags & ~0x100;
+	
+	// the task is ready to run
+	// and the parent will give up its timeslice
+	task->t_flags = TF_RUNNING;
+	//current->t_flags |= TF_RESCHED;
+	
+	if( !kern ){
+		// This task is now the foreground
+		task_setfg(task->t_pid);
+	}
+	
+	
+	restore(eflags);
+	
+	return task->t_pid;
 }
 
 /* function: sys_fork
@@ -533,6 +615,80 @@ int sys_fork( void )
 	return task->t_pid;
 }
 
+/* Spawn a kernel task */
+pid_t worker_spawn(void(*thread)(void))
+{
+	pid_t pid = task_spawn(1);
+	
+	if( pid == 0 ){
+		thread();
+		sys_exit(0);
+		return pid;
+	} else {
+		return pid;
+	}
+	
+	// Allocate a task structure
+	struct task* task = (struct task*)kmalloc(sizeof(struct task));
+	if( task == NULL ){
+		syslog(KERN_ERR, "unable to spawn kernel worker. insufficient memory!");
+		return (pid_t)-ENOMEM;
+	}
+	memset(task, 0, sizeof(*task));
+
+	// Setup task parameters
+	task->t_gid = task->t_uid = 0;
+	task->t_flags = 0;
+	task->t_esp = (u32)kmalloc(1024);
+	if( task->t_esp == 0 ){
+		syslog(KERN_ERR, "unable to spawn kernel worker. insufficient memory!");
+		kfree(task);
+		return (pid_t)-ENOMEM;
+	}
+	task->t_ebp = 0;
+	task->t_eip = (u32)thread;
+	task->t_eflags = (1<<9) | (1<<21); // CPUID and IF
+	task->t_waitfor = 0;
+	task->t_umask = 0666;
+	task->t_dataend = 0;
+	task->t_dir = copy_page_dir(kerndir);
+	init_task_vfs(&task->t_vfs);
+	
+	asm volatile("fxsave %0;" :: "m"(g_fpu_state));
+	memcpy(task->t_fpu, g_fpu_state, 512);
+	
+	if( task->t_dir == NULL ){
+		syslog(KERN_ERR, "unable to copy kernel page directory. insufficient memory!");
+		kfree((void*)task->t_esp);
+		kfree(task);
+		return (pid_t)-ENOMEM;
+	}
+	
+	// Initialize lists
+	INIT_LIST(&task->t_children);
+	INIT_LIST(&task->t_sibling);
+	INIT_LIST(&task->t_queue);
+	INIT_LIST(&task->t_globlink);
+	INIT_LIST(&task->t_ttywait);
+	INIT_LIST(&task->t_mesgq.queue);
+	spin_init(&task->t_mesgq.lock);
+	
+	// Add task to required lists
+	//task->t_parent = task_lookup(0);
+	//list_add(&task->t_sibling, &task->t_parent->t_children);
+	task->t_parent = NULL;
+	list_add(&task->t_queue, &ready_tasks);
+	list_add(&task->t_globlink, &task_globlist);
+	
+	// Set the pid and enable the task
+	task->t_pid = next_pid++;
+	task->t_flags |= TF_RUNNING;
+
+	// Return the process id
+	return task->t_pid;	
+}
+	
+
 /* function: sys_exit
  * purpose:
  * 	sets the result field of the task, and the exit
@@ -558,7 +714,7 @@ void sys_exit( int result )
 	
 	if( current->t_parent && current->t_pid == task_getfg() ){
 		task_setfg(current->t_parent->t_pid);
-	} else {
+	} else if( current->t_pid == task_getfg() ){
 		task_setfg(0);
 	}
 	
@@ -665,7 +821,9 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 		restore(eflags);
 		return pid;
 	}
-	list_rem(&task->t_sibling); // remove from the parent-child list
+	if( task->t_parent ){
+		list_rem(&task->t_sibling); // remove from the parent-child list
+	}
 	list_rem(&task->t_globlink); // remove from the global task list
 	// the tasks runtime data should have already been free'd, we just need
 	// to free the task structure and remove it from lists.

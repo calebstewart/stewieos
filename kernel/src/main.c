@@ -19,9 +19,7 @@
 #include <stdio.h>
 #include "serial.h"
 #include "ata.h"
-//#include "ext2.h"
 #include <dirent.h>
-// testing spinlock
 #include "spinlock.h"
 #include "cmos.h"
 #include "ext2fs/ext2.h"
@@ -29,6 +27,23 @@
 #include "ps2.h"
 
 int initfs_install(multiboot_info_t* mb);
+
+// This worker task will run for 10 seconds and exit. It's only use is for testing worker_spawn
+void worker_func(void);
+void worker_func(void)
+{
+	syslog(KERN_WARN, "Worker task %d is running.", current->t_pid);
+	tick_t finish = TIMER_IN(timer_get_freq()*10);
+	tick_t wait_until = timer_get_ticks();
+	while( timer_get_ticks() < finish ){
+		if( timer_get_ticks() >= wait_until ){
+			syslog(KERN_WARN, "Worker task %d is working...", current->t_pid);
+			wait_until += timer_get_freq();
+		}
+	}
+	syslog(KERN_WARN, "Worker task %d is finished. Exiting...", current->t_pid);
+	sys_exit(0);
+}
 
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
@@ -46,7 +61,6 @@ int kmain( multiboot_info_t* mb )
 	u32 max_code = cpuid_string(CPUID_GETVENDORSTRING, cpu_vendor);
 	
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
-	
 	
 	printk("Initializing virtual filesystem... \n");
 	initialize_filesystem();
@@ -150,6 +164,11 @@ int kmain( multiboot_info_t* mb )
 		syslog(KERN_NOTIFY, "INIT: killing forked init task...");
 		sys_exit(-1);
 	}
+	
+	// Spawn a dummy worker task for testing (will exit after 10 seconds)
+	pid_t worker;
+	worker = worker_spawn(worker_func);
+	syslog(KERN_NOTIFY, "Spawned worker task on pid %d", worker);
 	
 	enablei();
 	while(1){

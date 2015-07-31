@@ -131,6 +131,9 @@ pid_t sys_waitpid(pid_t pid, int* status, int options);
 int sys_message_send(pid_t pid, unsigned int type, const char* what, size_t length);
 int sys_message_pop(message_t* message, unsigned int id, unsigned int flags);
 
+pid_t task_spawn(int kern);
+pid_t worker_spawn(void(*worker)(void));
+
 extern struct task* current;
 
 #endif

@@ -106,7 +106,13 @@ void init_paging( multiboot_info_t* mb )
 		i+=0x1000;
 	}
 	
-	// allocate the initial frames for the kernel heap
+	// allocate the page directory tables for the entire heap
+	for( u32 a = 0xE0000000; a < 0xF0000000; a += 0x1000 ){
+		get_page((void*)a, 1, kerndir);
+		//alloc_frame(page, 0, 1);
+	}
+	
+	// allocate the actual initial pages for the kernel heap
 	for( u32 a = 0xE0000000; a < 0xE0010000; a += 0x1000 ){
 		page_t* page = get_page((void*)a, 0, kerndir);
 		alloc_frame(page, 0, 1);
@@ -153,6 +159,10 @@ void init_paging( multiboot_info_t* mb )
  */
 int alloc_page(page_dir_t* dir, void* addr, int user, int rw)
 {
+	if( dir != kerndir ){
+		addr = addr;
+	}
+	
 	page_t* page = get_page(addr, 1, dir);
 
 	if( page->present != 0 ){
