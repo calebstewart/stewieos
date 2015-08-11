@@ -1,5 +1,5 @@
 #include <errno.h>
-#include "ext2.h"
+#include "ext2fs/ext2.h"
 #include "kmem.h"
 #include "block.h"
 #include "fs.h"

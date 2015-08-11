@@ -7,6 +7,7 @@ struct callback_info;
 struct callback_info
 {
 	timer_callback_t callback;
+	void* context;
 	tick_t when;
 	struct callback_info* next, *prev;
 };
@@ -34,7 +35,7 @@ void timer_interrupt(struct regs* regs)
 	while( next_callback && next_callback->when <= current_tick )
 	{
 		// call the callback
-		next_callback->when = next_callback->callback(current_tick, regs);
+		next_callback->when = next_callback->callback(current_tick, regs, next_callback->context);
 		// Remove the callback from the list
 		struct callback_info* tmp = next_callback;
 		next_callback = tmp->next;
@@ -124,7 +125,7 @@ void timer_sync_time( void )
 	current_time = rtc_read();
 }
 
-int timer_callback(tick_t when, timer_callback_t callback)
+int timer_callback(tick_t when, void* context, timer_callback_t callback)
 {
 	int nr = -1;
 	for(int i = 0; i < TIMER_MAX_CALLBACKS; ++i){
@@ -139,6 +140,7 @@ int timer_callback(tick_t when, timer_callback_t callback)
 	
 	callbacks[nr].when = when;
 	callbacks[nr].callback = callback;
+	callbacks[nr].context = context;
 	callbacks[nr].next = NULL;
 	callbacks[nr].prev = NULL;
 	

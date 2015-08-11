@@ -44,10 +44,10 @@ int main(int argc, char** argv)
 	// detach from our parent and controlling terminal (creating a daemon)
 	detach(getpid());
 	
-	char buffer[512] = {0};
+	char buffer[64] = {0};
 	ssize_t count = 0;
 	
-	while( (count = readline(pipefd, buffer, 512)) >= 0 )
+	while( (count = readline(pipefd, buffer, 64)) >= 0 )
 	{
 		if( count == 0 ) continue;
 		write(log, buffer, count);

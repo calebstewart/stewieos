@@ -1,4 +1,4 @@
-#include "ext2.h"
+#include "ext2fs/ext2.h"
 #include "kmem.h"
 #include "dentry.h"
 #include <errno.h>

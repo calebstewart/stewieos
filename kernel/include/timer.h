@@ -9,7 +9,7 @@
 
 struct regs;
 typedef unsigned long tick_t;
-typedef tick_t (*timer_callback_t)(tick_t, struct regs*);
+typedef tick_t (*timer_callback_t)(tick_t, struct regs*, void* context);
 
 // Initialize the PIT to fire freq times per second
 void init_timer(unsigned int freq);
@@ -21,7 +21,7 @@ unsigned int timer_get_freq( void );
 tick_t timer_get_ticks( void );
 
 // Setup a timer callback to fire at a specific time
-int timer_callback(tick_t when, timer_callback_t callback);
+int timer_callback(tick_t when, void* context, timer_callback_t callback);
 
 time_t timer_get_time( void );
 void timer_sync_time( void );

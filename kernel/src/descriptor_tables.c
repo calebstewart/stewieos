@@ -19,6 +19,7 @@ struct gdt_ptr		gdt_ptr;			// Global Descriptor Table
 struct idt_entry	idt_table[256];			// Interrupt Descriptor Table
 struct idt_ptr		idt_ptr;			// Interrupt Descriptor Table Pointer
 isr_callback_t		isr_callback[256];		// Interrupt handlers for IRQs and ISRs
+void*				isr_context[256];		// context pointers for the callbacks
 tss_entry_t		tss_entry = {			// Task State Segment Entry
 				.esp0 = TASK_KSTACK_ADDR+TASK_KSTACK_SIZE,
 				.ss0 = 0x10,
@@ -219,7 +220,7 @@ const char* g_fault_names[] = {
 void isr_handler(struct regs regs)
 {
 	if( isr_callback[regs.intno] ){
-		isr_callback[regs.intno](&regs);
+		isr_callback[regs.intno](&regs, isr_context[regs.intno]);
 		return;
 	}
 	if( regs.intno < 32 ){
@@ -258,14 +259,19 @@ void irq_handler(struct regs regs)
 	outb(0x20, 0x20);
 
 	if( isr_callback[regs.intno] != 0 ){
-		isr_callback[regs.intno](&regs);
+		isr_callback[regs.intno](&regs, isr_context[regs.intno]);
 	}
 
 }
 
-void register_interrupt(u8 n, isr_callback_t callback)
+void register_interrupt(u8 n, void(*callback)(struct regs*))
+{
+	register_interrupt_context(n, NULL, (isr_callback_t)callback);
+}
+void register_interrupt_context(u8 n, void* context, isr_callback_t callback)
 {
 	isr_callback[n] = callback;
+	isr_context[n] = context;
 }
 void unregister_interrupt(u8 n)
 {

@@ -38,6 +38,9 @@
  */
 void syslog(int level, const char* format, ...);
 
+// This is identical to syslog, but does not provide the newline character
+void syslog_printf(const char* fmt, ...);
+
 /* Start the syslog daemon.
  * 	This function forks and starts a syslog daemon which monitors the kernel system log and will flush
  * 	the log to the given device or regular file whenever the buffer is filled or special messages are

@@ -1,6 +1,6 @@
 #include "exec.h" // For the module definitions
 #include "kernel.h" // For printk
-#include "ext2.h"
+#include "ext2fs/ext2.h"
 
 // Forward Declarations
 int ext2fs_load(module_t* module);

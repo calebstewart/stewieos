@@ -3,6 +3,7 @@
 #include "pmm.h"
 #include "elf/elf32.h"
 #include "task.h"
+#include "error.h"
 
 page_dir_t* kerndir = NULL;
 page_dir_t* curdir = NULL;
@@ -87,9 +88,13 @@ void init_paging( multiboot_info_t* mb )
 	curdir->phys = (u32)( &curdir->tablePhys[0] ) - KERNEL_VIRTUAL_BASE;
 
 	// allocate the initial page tables for the kernel heap
-	for( u32 a = 0xE0000000; a < 0xEFFFF000; a += 0x1000 ){
+	for( u32 a = 0xD0000000; a < 0xF0000000; a += 0x1000 ){
 		get_page((void*)a, 1, kerndir);
 	}
+	
+// 	for(u32 a = 0xF0000000; a >= 0xF0000000; a += 0x1000){
+// 		get_page((void*)a, 1, kerndir);
+// 	}
 	
 	u32 i = KERNEL_VIRTUAL_BASE;
 	while( i < placement_address )
@@ -106,14 +111,8 @@ void init_paging( multiboot_info_t* mb )
 		i+=0x1000;
 	}
 	
-	// allocate the page directory tables for the entire heap
-	for( u32 a = 0xE0000000; a < 0xF0000000; a += 0x1000 ){
-		get_page((void*)a, 1, kerndir);
-		//alloc_frame(page, 0, 1);
-	}
-	
 	// allocate the actual initial pages for the kernel heap
-	for( u32 a = 0xE0000000; a < 0xE0010000; a += 0x1000 ){
+	for( u32 a = 0xD0000000; a < 0xD0010000; a += 0x1000 ){
 		page_t* page = get_page((void*)a, 0, kerndir);
 		alloc_frame(page, 0, 1);
 	}
@@ -141,7 +140,7 @@ void init_paging( multiboot_info_t* mb )
 // 		page->frame = 0;
 	}
 	
-	init_kheap(0xE0000000, 0xE0010000, 0xF0000000);
+	init_kheap(0xD0000000, 0xD0010000, 0xF0000000);
 }
 
 /* function: alloc_page
@@ -213,6 +212,55 @@ page_t* get_page(void* vpaddress, int make, page_dir_t* dir)
 	}
 	// it doesn't exist, return NULL
 	return NULL;
+}
+
+/* Retrieves the physical memory address referred to by the virtual
+ * address provided. The physical address is stored in *phys, and
+ * EOKAY is returned on success or -EFAULT if the virtual address
+ * is not mapped.
+ */
+int get_physical_addr(page_dir_t* dir, void* virt, u32* phys)
+{
+	// Get the page entry
+	page_t* page = get_page(virt, 0, dir);
+	if( page == NULL ){
+		*phys = 0;
+		return -EFAULT;
+	}
+	
+	// Check if it is mapped
+	if( page->present == 0 ){
+		*phys = 0;
+		return -EFAULT;
+	}
+	
+	// Calculate the address with the offset given in the virtual
+	// address.
+	*phys = (page->frame << 12) | ((u32)virt & 0xFFF);
+	return 0;
+}
+
+void map_page(page_dir_t* dir, void* virt, u32 phys, int user, int rw)
+{
+	page_t* page = get_page(virt, 1, dir);
+	
+	page->present = 1;
+	page->rw = rw > 0 ? 1 : 0;
+	page->user = user > 0 ? 1 : 0;
+	page->frame = (phys >> 12);
+	
+	invalidate_page((u32*)virt);
+}
+
+void unmap_page(page_dir_t* dir, void* virt)
+{
+	page_t* page = get_page(virt, 0, dir);
+	if( page == NULL ) return; // no reason do allocate the table...
+	
+	page->present = 0;
+	page->frame = 0;
+	
+	invalidate_page((u32*)virt);
 }
 
 void* temporary_map(u32 addr, page_dir_t* dir)

@@ -116,7 +116,7 @@ struct regs
 };
 
 // Defines the prototype for interrupt routine callbacks
-typedef void (*isr_callback_t)(struct regs* regs);
+typedef void (*isr_callback_t)(struct regs* regs, void* context);
 
 
 int initialize_descriptor_tables( void );
@@ -178,7 +178,8 @@ void isr_handler(struct regs regs);
 void irq_handler(struct regs regs);
 
 // register a function as the interrupt handler
-void register_interrupt(u8 n, isr_callback_t callback);
+void register_interrupt(u8 n, void(*callback)(struct regs*));
+void register_interrupt_context(u8 n, void* context, isr_callback_t callback);
 void unregister_interrupt(u8 n);
 
 

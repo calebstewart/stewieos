@@ -1,5 +1,5 @@
 #include <string.h>
-
+/*
 int strcmp( const char* s1, const char* s2)
 {
 	while( 1 ){
@@ -63,3 +63,14 @@ size_t strlen( const char* s )
 	}
 	return len;
 }
+
+int memcmp(const void *s1, const void *s2, size_t n)
+{
+	for(size_t i = 0; i < n; ++i){
+		if( ((const char*)s1)[i] > ((const char*)s2)[i] ) return 1;
+		else if( ((const char*)s1)[i] < ((const char*)s2)[i] ) return -1;
+	}
+	return 0;
+}*/
+
+

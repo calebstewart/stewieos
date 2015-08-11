@@ -266,9 +266,9 @@ int internal_printk(const char* format, __builtin_va_list ap)
 	//__builtin_va_list ap;
 	//__builtin_va_start(ap, format);
 	
-	put_char('[',0,0,0);
-	put_uint(timer_get_ticks(), 0, 0, 0, 10);
-	put_str("] ", 0, 0, 0);
+// 	put_char('[',0,0,0);
+// 	put_uint(timer_get_ticks(), 0, 0, 0, 10);
+// 	put_str("] ", 0, 0, 0);
 	
 	while(*format){
 		
@@ -407,6 +407,11 @@ int internal_printk(const char* format, __builtin_va_list ap)
 			
 		} else { // end format == '%'
 			put_char(*format, 0, 0, 0);
+			if( *format == '\n' ){
+				put_char('[',0,0,0);
+				put_uint(timer_get_ticks(), 0,0,0, 10);
+				put_str("] ",0,0,0);
+			}
 			format++;
 			count++;
 		} // end format != '%'

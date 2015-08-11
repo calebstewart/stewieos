@@ -7,28 +7,35 @@ OBJFILES:= $(CFILES:.c=.o) $(ASMFILES:.s=.s.o)
 WARNINGS:= -Werror -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-            -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion
-CFLAGS:=-nostdlib -nostartfiles -fno-builtin -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -I $(PROJDIRS)
-LDFLAGS:=-Tstewieos.ld -lgcc -nostdlib
+            -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion -Wno-unused-parameter -Wno-conversion
+CFLAGS:=-nostartfiles -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -I include -D_STEWIEOS -D__KERNEL__
+LDFLAGS:=-Tstewieos.ld -lgcc -nostartfiles
 
 KERNEL_VERSION:=0.0.1
 KERNEL_ID:=stewieos
 KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)
 
-.PHONY: all install clean
+.PHONY: all install clean libs-all libs-clean
 
-all: $(KERNEL_NAME)
+all: libs-all $(KERNEL_NAME)
 	rm -f ../stewieos-current
 	ln -s $(shell readlink -f $(KERNEL_NAME)) ../stewieos-current
 
 install:
 	cp ./$(KERNEL_NAME) /mnt/boot/
 
-clean:
+clean: libs-clean
 	rm -f $(OBJFILES)
 
+libs-all:
+	$(MAKE) -C ./libs all
+
+libs-clean:
+	$(MAKE) -C ./libs clean
+	
+
 $(KERNEL_NAME): $(OBJFILES)
-	$(CC) $(CFLAGS) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(KERNEL_NAME) $(OBJFILES:./src/start.s.o=) $(wildcard ./libs/lib*.a) $(LDFLAGS)
 
 %.s.o: %.s
 	$(ASM) -f elf32 -g $(@:.s.o=.s) -o $@

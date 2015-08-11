@@ -1,10 +1,19 @@
 #include "task.h"
 #include <errno.h>
 
+typedef struct _sleep_data
+{
+	struct task* task;
+	u32 wakeup;
+	list_t link;
+} sleep_data_t;
+
 //extern u32 		initial_stack;		// defined in start.s
 struct task		*current = NULL;	// always points to the current task
 list_t			ready_tasks;		// list of ready tasks
 list_t			task_globlist;		// global list of all tasks
+list_t			task_sleeplist;		// global list of sleeping tasks
+spinlock_t		task_sleeplock;		// Lock for the sleeping list
 //struct task		*ready_tasks;		// list of ready tasks
 pid_t			next_pid = 0;		// the next process id
 pid_t			foreground_pid = 0;	// The foreground task
@@ -81,6 +90,7 @@ void task_init( void )
 	INIT_LIST(&init->t_globlink);
 	INIT_LIST(&init->t_ttywait);
 	INIT_LIST(&init->t_mesgq.queue);
+	INIT_LIST(&init->t_semlink);
 	spin_init(&init->t_mesgq.lock);
 	//printk("%2Vtask_init: init->t_dir=%08X\n", init->t_dir);
 	//while(1);
@@ -126,6 +136,9 @@ void task_init( void )
 	list_add(&init->t_queue, &ready_tasks);
 	list_add(&init->t_globlink, &task_globlist);
 	current = init;
+	
+	INIT_LIST(&task_sleeplist);
+	spin_init(&task_sleeplock);
 }
 
 /* function: task_preempt
@@ -402,6 +415,11 @@ void task_wakeup(struct task* task)
 		return;
 	}
 	
+	// we may have added the task to a different queue before
+	if( list_inserted( &task->t_queue ) ){
+		list_rem(&task->t_queue);
+	}
+	// Reinsert the task
 	list_add(&task->t_queue, &ready_tasks);
 	task->t_flags &= ~(TF_WAITMASK | TF_RESCHED);
 	task->t_flags |= TF_RUNNING;
@@ -458,6 +476,7 @@ pid_t task_spawn(int kern)
 	INIT_LIST(&task->t_globlink);
 	INIT_LIST(&task->t_ttywait);
 	INIT_LIST(&task->t_mesgq.queue);
+	INIT_LIST(&task->t_semlink);
 	spin_init(&task->t_mesgq.lock);
 	
 	if( !kern ){
@@ -565,6 +584,7 @@ int sys_fork( void )
 	INIT_LIST(&task->t_globlink);
 	INIT_LIST(&task->t_ttywait);
 	INIT_LIST(&task->t_mesgq.queue);
+	INIT_LIST(&task->t_semlink);
 	spin_init(&task->t_mesgq.lock);
 	
 	copy_task_vfs(&task->t_vfs, &current->t_vfs);
@@ -615,13 +635,20 @@ int sys_fork( void )
 	return task->t_pid;
 }
 
+void worker_wrapper(void(*thread)(void*), void* context);
+void worker_wrapper(void(*thread)(void*), void* context)
+{
+	thread(context);
+	sys_exit(0);
+}
+
 /* Spawn a kernel task */
-pid_t worker_spawn(void(*thread)(void))
+pid_t worker_spawn(void(*thread)(void*), void* context)
 {
 	pid_t pid = task_spawn(1);
 	
 	if( pid == 0 ){
-		thread();
+		thread(context);
 		sys_exit(0);
 		return pid;
 	} else {
@@ -644,15 +671,20 @@ pid_t worker_spawn(void(*thread)(void))
 		syslog(KERN_ERR, "unable to spawn kernel worker. insufficient memory!");
 		kfree(task);
 		return (pid_t)-ENOMEM;
-	}
+	}	
 	task->t_ebp = 0;
-	task->t_eip = (u32)thread;
+	task->t_eip = (u32)worker_wrapper;
 	task->t_eflags = (1<<9) | (1<<21); // CPUID and IF
 	task->t_waitfor = 0;
 	task->t_umask = 0666;
 	task->t_dataend = 0;
 	task->t_dir = copy_page_dir(kerndir);
 	init_task_vfs(&task->t_vfs);
+	
+	// Setup the stack
+	*(void**)(task->t_esp) = context;
+	*(void**)((u32)task->t_esp+4) = thread;
+	task->t_esp = (u32)((u32)task->t_esp + sizeof(void*)*2);
 	
 	asm volatile("fxsave %0;" :: "m"(g_fpu_state));
 	memcpy(task->t_fpu, g_fpu_state, 512);
@@ -671,6 +703,7 @@ pid_t worker_spawn(void(*thread)(void))
 	INIT_LIST(&task->t_globlink);
 	INIT_LIST(&task->t_ttywait);
 	INIT_LIST(&task->t_mesgq.queue);
+	INIT_LIST(&task->t_semlink);
 	spin_init(&task->t_mesgq.lock);
 	
 	// Add task to required lists
@@ -833,4 +866,69 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 	
 	// return the tasks process id
 	return pid;
+}
+
+tick_t task_sleep_monitor(tick_t now ATTR((unused)), struct regs* regs ATTR((unused)), void* context ATTR((unused)))
+{
+	spin_lock(&task_sleeplock);
+	
+	// Grab the next sleeping task
+	list_t* item = list_first(&task_sleeplist);
+	sleep_data_t* data = list_entry(item, sleep_data_t, link);
+	
+	// Wake it up
+	task_wakeup(data->task);
+	
+	// Remove it from the queue
+	list_rem(&data->link);
+	kfree(data);
+	
+	// If there are no more, cancel the timer
+	if( list_empty(&task_sleeplist) ){
+		spin_unlock(&task_sleeplock);
+		return TIMER_CANCEL;
+	}
+	
+	// Otherwise, get the next longest wait, and reset the timer
+	data = list_entry(list_first(&task_sleeplist), sleep_data_t, link);
+	
+	spin_unlock(&task_sleeplock);
+	
+	return data->wakeup;
+}
+
+int task_sleep_compare(list_t* a, list_t* b);
+int task_sleep_compare(list_t* a, list_t* b)
+{
+	sleep_data_t* data_a = list_entry(a, sleep_data_t, link);
+	sleep_data_t* data_b = list_entry(b, sleep_data_t, link);
+	
+	if( data_a->wakeup < data_b->wakeup ) return -1;
+	else if( data_a->wakeup > data_b->wakeup ) return 1;
+	else return 0;
+}
+
+int task_sleep(struct task* task, u32 milli)
+{
+	sleep_data_t* data = (sleep_data_t*)kmalloc(sizeof(sleep_data_t));
+	if( data == NULL ) return -1;
+	
+	data->task = task;
+	data->wakeup = timer_get_ticks() + milli;
+	INIT_LIST(&data->link);
+	
+	spin_lock(&task_sleeplock);
+	
+	// add to the list, sorted by wakeup time
+	list_add_ordered(&data->link, &task_sleeplist, task_sleep_compare);
+
+	if( list_is_lonely(&data->link, &task_sleeplist) ){
+		timer_callback(data->wakeup, NULL, task_sleep_monitor);
+	}
+	
+	spin_unlock(&task_sleeplock);
+	
+	task_wait(data->task, TF_WAITIO);
+	
+	return 0;
 }

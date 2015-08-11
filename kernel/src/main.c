@@ -25,24 +25,48 @@
 #include "ext2fs/ext2.h"
 #include "syslog.h"
 #include "ps2.h"
+#include "sem.h"
+#include "acpi/acpi.h"
 
 int initfs_install(multiboot_info_t* mb);
 
 // This worker task will run for 10 seconds and exit. It's only use is for testing worker_spawn
-void worker_func(void);
-void worker_func(void)
+void worker_func(void*);
+void worker_func(void* context)
 {
-	syslog(KERN_WARN, "Worker task %d is running.", current->t_pid);
+	syslog(KERN_WARN, "Worker task %d is running with context 0x%X.", current->t_pid, context);
 	tick_t finish = TIMER_IN(timer_get_freq()*10);
-	tick_t wait_until = timer_get_ticks();
 	while( timer_get_ticks() < finish ){
-		if( timer_get_ticks() >= wait_until ){
+		task_sleep(current, 1000);
+		//if( timer_get_ticks() >= wait_until ){
 			syslog(KERN_WARN, "Worker task %d is working...", current->t_pid);
-			wait_until += timer_get_freq();
-		}
+		//	wait_until += timer_get_freq();
+		//}
 	}
 	syslog(KERN_WARN, "Worker task %d is finished. Exiting...", current->t_pid);
 	sys_exit(0);
+}
+
+void sem_test(void* context);
+void sem_test(void* context)
+{
+	sem_t* sem = (sem_t*)context;
+	
+	syslog(KERN_WARN, "Worker %d waiting on semaphore for at most 0.5 seconds...", current->t_pid);
+	if( sem_wait(sem, 1000) != 0 ){
+		syslog(KERN_WARN, "Worker %d timed out while waiting. Exiting...", current->t_pid);
+		return;
+	}
+	
+	syslog(KERN_WARN, "Worker %d aquired a unit. Going to sleep for 4 seconds.", current->t_pid);
+	
+	task_sleep(current, 4000);
+	
+	sem_signal(sem);
+	
+	syslog(KERN_WARN, "Worker %d released a unit. Exiting...", current->t_pid);
+	
+	return;
 }
 
 int kmain( multiboot_info_t* mb );
@@ -148,6 +172,11 @@ int kmain( multiboot_info_t* mb )
 		printk("error: unable to initialize kernel system log.\n");
 	}
 	
+	syslog(KERN_NOTIFY, "Initializing ACPICA...");
+	if( acpi_init() != 0 ){
+		syslog(KERN_ERR, "error: unable to initialize acpi! power management disabled.");
+	}
+	
 	const char* INIT = "/bin/init";
 	syslog(KERN_NOTIFY, "Loading INIT task (%s).", INIT);
 	
@@ -166,14 +195,20 @@ int kmain( multiboot_info_t* mb )
 	}
 	
 	// Spawn a dummy worker task for testing (will exit after 10 seconds)
-	pid_t worker;
-	worker = worker_spawn(worker_func);
-	syslog(KERN_NOTIFY, "Spawned worker task on pid %d", worker);
+	//pid_t worker;
+	//worker = worker_spawn(worker_func, (void*)0xDEADBEEF);
+	//syslog(KERN_NOTIFY, "Spawned worker task on pid %d", worker);
+	
+	sem_t* sem = sem_alloc(2);
+	//pid_t worker[3];
+	for(int i = 0; i < 3; ++i){
+		worker_spawn(sem_test, sem);
+	}
 	
 	enablei();
 	while(1){
 		asm volatile("hlt");
 	}
 	
-	return (int)0xdeadbeaf;
+	return (int)0xdeadbeef;
 }

@@ -26,6 +26,9 @@ struct list
 // is item the only item in the list contained at head?
 #define list_is_lonely(item, head) ((item)->next == head && (item)->prev == head)
 
+// Returns -1 for a < b, 0 for a == b, and 1 for a > b
+typedef int(*list_compare_func_t)(list_t*, list_t*);
+
 static inline list_t* list_first(list_t* head)
 {
 	return head->next;
@@ -76,4 +79,21 @@ static inline void list_rem(list_t* what)
 	INIT_LIST(what);
 }
 
+static inline void list_add_ordered(list_t* what,
+									list_t* where,
+									list_compare_func_t compare)
+{
+	if( list_empty(where) ){
+		list_add(what, where);
+		return;
+	}
+	list_t* item;
+	list_for_each(item, where){
+		if( compare(what, item) <= 0 ){
+			list_add_before(what, item);
+			return;
+		}
+	}
+	list_add_before(what, where);
+}
 #endif

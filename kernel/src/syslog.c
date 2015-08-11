@@ -52,6 +52,27 @@ int begin_syslog_daemon(const char* syslog_device ATTR((unused)))
 	return 0;
 }
 
+void syslog_printf(const char* format, ...)
+{
+	char buffer[512];
+	char buffer2[512];
+	
+	va_list args;
+	va_start(args, format);
+	ee_vsprintf(buffer, format, args);
+	va_end(args);
+	
+	// we normally can't write to a file from the kernel, but this is a named pipe and
+	// should ever actually modify the file system. This is fine, since everything is
+	// handled "in house"
+	if( syslog_pipe != NULL ){
+		file_write(syslog_pipe, buffer, strlen(buffer2));
+	} //else {
+		printk("%s", buffer);
+	//}
+	
+}
+
 void syslog(int level, const char* format, ...)
 {
 	char buffer[512];
@@ -66,7 +87,6 @@ void syslog(int level, const char* format, ...)
 	va_start(args, format);
 	ee_vsprintf(buffer, format, args);
 	va_end(args);
-	
 	
 	sprintf(buffer2, "[%ld] %s: %s\n", timer_get_time(), syslog_level[level], buffer);
 	

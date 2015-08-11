@@ -19,6 +19,8 @@ static void read_line(FILE* filp, char* buffer, size_t max)
 	buffer[n] = 0;
 }
 
+void monitor_shell(pid_t, char**, char**);
+
 int main(int argc, char** argv)
 {
 	FILE* modfile = NULL;
@@ -75,12 +77,38 @@ int main(int argc, char** argv)
 		return 0;
 	} else if( pid != 0 ){
 		printf("INIT: forked process.\n");
-		exit(0);
-		return 0;
+		monitor_shell(pid, arguments, environ);
 	} else {
 		result = execve(arguments[0], arguments, environ);
 		printf("INIT: error: unable to execute shell: error code %d.\n", errno);
 	}
 	
 	return 0;
+}
+
+void monitor_shell(pid_t pid, char** arguments, char** environ)
+{
+	int status = 0;
+	int result = 0;
+	
+	while( 1 )
+	{
+		waitpid(pid, &status, 0);
+		
+		printf("INIT: root shell exited with status %d.\nINIT: restarting...\n", status);
+		
+		pid = fork();
+		if( pid < 0 ){
+			printf("INIT: unable to fork process: error code %d.\n", errno);
+			exit( 0 );
+		} else if( pid != 0 ){
+		} else {
+			result = execve(arguments[0], arguments, environ);
+			printf("INIT: error: unable to execute shell: error code %d.\n", errno);
+			exit(0);
+		}
+	}
+
+	// This shouldn't happen...
+	exit(0);
 }

@@ -73,36 +73,38 @@ typedef struct _message_queue
 /* Process Task Structure */
 struct task
 {
-	pid_t			t_pid;					// process id
-	pid_t			t_gid;					// process group id
-	uid_t			t_uid;
-	u32			t_flags;				// the flags/state of this task
-	u32			t_esp;					// the stack pointer
-	u32			t_ebp;					// the base pointer
-	u32			t_eip;					// the instruction pointer to jump to
-	u32			t_eflags;				// the eflags before the last switch
-	pid_t			t_waitfor;				// what are we waiting on? See waitpid.
+	pid_t				t_pid;					// process id
+	pid_t				t_gid;					// process group id
+	uid_t				t_uid;
+	u32					t_flags;				// the flags/state of this task
+	u32					t_esp;					// the stack pointer
+	u32					t_ebp;					// the base pointer
+	u32					t_eip;					// the instruction pointer to jump to
+	u32					t_eflags;				// the eflags before the last switch
+	pid_t				t_waitfor;				// what are we waiting on? See waitpid.
 	
-	tick_t			t_ticks_left;				// the number of clock ticks left until we preempt
+	tick_t				t_ticks_left;				// the number of clock ticks left until we preempt
+	tick_t				t_timeout;				// Usually just the semaphore timeout
 	
-	int			t_status;				// result code from sys_exit
+	int					t_status;				// result code from sys_exit
 	
-	mode_t			t_umask;				// The current umask
+	mode_t				t_umask;				// The current umask
 	
-	u32			t_dataend;				// End of the data (used for sbrk)
+	u32					t_dataend;				// End of the data (used for sbrk)
 	
-	char			t_fpu[512];				// FPU state (For FXSAVE and FXRSTOR)
+	char				t_fpu[512];				// FPU state (For FXSAVE and FXRSTOR)
 	
 	struct page_dir*	t_dir;					// page directory for this task
-	struct vfs		t_vfs;					// this tasks virtual file system information
-	struct regs		t_regs;					// Register Information for the task switch after an execve
+	struct vfs			t_vfs;					// this tasks virtual file system information
+	struct regs			t_regs;					// Register Information for the task switch after an execve
 	message_queue_t		t_mesgq;				// message queue for ipc
 	
-	list_t			t_sibling;				// the link in the parents children list
-	list_t			t_children;				// list of child tasks (forked processes)
-	list_t			t_queue;				// link in the current queue
-	list_t			t_globlink;				// link in the global list
-	list_t			t_ttywait;				// link in the tty wait list
+	list_t				t_sibling;				// the link in the parents children list
+	list_t				t_children;				// list of child tasks (forked processes)
+	list_t				t_queue;				// link in the current queue
+	list_t				t_globlink;				// link in the global list
+	list_t				t_ttywait;				// link in the tty wait list
+	list_t				t_semlink;				// semaphore wait list
 	struct task*		t_parent;				// the parent of this task
 };
 
@@ -132,7 +134,10 @@ int sys_message_send(pid_t pid, unsigned int type, const char* what, size_t leng
 int sys_message_pop(message_t* message, unsigned int id, unsigned int flags);
 
 pid_t task_spawn(int kern);
-pid_t worker_spawn(void(*worker)(void));
+pid_t worker_spawn(void(*worker)(void*), void* context);
+
+tick_t task_sleep_monitor(tick_t now, struct regs* regs, void* context);
+int task_sleep(struct task* task, u32 milli);
 
 extern struct task* current;
 

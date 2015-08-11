@@ -12,7 +12,7 @@ typedef struct page
 	u32 present		: 1;	// Is this page entry present?
 	u32 rw			: 1;	// Writable?
 	u32 user		: 1;	// Are users aloud to read/write?
-	u32 accessed		: 1;	// Has the page been accessed since last refresh
+	u32 accessed	: 1;	// Has the page been accessed since last refresh
 	u32 dirty		: 1;	// Has the page been written to since last refresh
 	u32 unused		: 7;	// Unused bits
 	u32 frame		: 20;	// The Frame address (shifted right 12 bits)
@@ -129,12 +129,13 @@ int strip_page_dir(page_dir_t* dir);
  * 
  * \param dir The page directory in which to look up the address.
  * \param virt The virtual address to look up.
- * \return The physical address to which the virtual address is mapped
+ * \param phys The location to store the physical address
+ * \return 0 on success and -EFAULT on failure
  * \note There is no good way to return for an unmapped page, so
  * 		you should check if the page is actually mapped before
  * 		using the function.
  */
-u32 get_physical_addr(page_dir_t* dir, void* virt);
+int get_physical_addr(page_dir_t* dir, void* virt, u32* phys);
 
 /*! \brief Copy the data from a physical frame of memory
  * 
