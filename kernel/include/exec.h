@@ -4,6 +4,10 @@
 #include "fs.h"
 #include "linkedlist.h"
 
+#define EXEC_VALID 1
+#define EXEC_INVALID 0
+#define EXEC_INTERP 2
+
 // Define the module info structure for a loadable module
 #define MODULE_INFO(name, load, remove) module_t __moduel_info __attribute__((section(".module_info"))) = { .m_name=(name), .m_load=(load), .m_remove=(remove) }
 
@@ -17,6 +21,8 @@ typedef struct _exec
 	struct file* file;	// The file this executable is read from
 	char** argv;		// Argument List
 	char** envp;		// Environment List
+	size_t argc;
+	size_t envc;
 	void* entry;		// The Entry Address
 	void* bssend;		// end of process data (for sbrk)
 	void* private;		// Private loader data
@@ -87,13 +93,14 @@ struct _exec_type
 	module_t*(*load_module)(struct file*);
 	/* function: check_exec
 	 * parameters:
+	 * 	const char* - the filepath used to execute this file
 	 *	exec_t* - the executable structure currently being loaded
 	 * return values:
+	 * 	Returns 2 if the executable is of the correct format but requires an interpreter
 	 * 	Returns 1 if the executable is of the correct format and can be loaded
 	 *	Returns 0 if the executable is invalid for the current system.
 	 */
-	int(*check_exec)(exec_t*);
-		
+	int(*check_exec)(const char*, exec_t*);
 	
 	exec_type_t* next;
 };

@@ -32,12 +32,14 @@ KERNEL_PAGE_NUMBER	equ (KERNEL_VIRTUAL_BASE >> 22)
 boot_page_directory:
 	; 4MB Page, Read/Write, Present
 	dd 0x00000083
+	dd 0x00400083
 	; Unmapped pages before kernel space
-	times (KERNEL_PAGE_NUMBER-1) dd 0
+	times (KERNEL_PAGE_NUMBER-2) dd 0
 	; 4MB page, Read/Write, Present
 	dd 0x00000083
+	dd 0x00400083
 	; Unmapped pages after 4MB of kernel space
-	times (1024-KERNEL_PAGE_NUMBER-1) dd 0
+	times (1024-KERNEL_PAGE_NUMBER-2) dd 0
 
 [section .init.text]
 

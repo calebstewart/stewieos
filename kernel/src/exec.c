@@ -66,6 +66,7 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	struct path path;
 	exec_t* exec = NULL;
 	int error = 0;
+	int check = 0;
 	
 	// Lookup the path from the filename
 	error = path_lookup(filename, WP_DEFAULT, &path);
@@ -90,8 +91,33 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	
 	// Initialize the structure
 	exec->file = filp;
-	exec->argv = argv;
-	exec->envp = envp;
+	
+	// Count the arguments
+	u32 argc = 0;
+	while( argv[argc] ) ++argc;
+	u32 envc = 0;
+	while( envp[envc] ) ++envc;
+	
+	char** nargv = (char**)kmalloc(sizeof(char*)*(argc+1));
+	char** nenvp = (char**)kmalloc(sizeof(char*)*(envc+1));
+	
+	for(u32 i = 0; i < argc; ++i){
+		nargv[i] = (char*)kmalloc(strlen(argv[i]));
+		strcpy(nargv[i], argv[i]);
+	}
+	for(u32 i = 0; i < envc; ++i){
+		nenvp[i] = (char*)kmalloc(strlen(envp[i]));
+		strcpy(nenvp[i], envp[i]);
+	}
+	
+	nargv[argc] = NULL;
+	nenvp[envc] = NULL;
+	
+	// Load the executable structure with the kernel side argument lists
+	exec->argv = nargv;
+	exec->envp = nenvp;
+	exec->argc = argc;
+	exec->envc = envc;
 	
 	// Fill the read buffer
 	file_seek(filp, 0, SEEK_SET);
@@ -104,7 +130,7 @@ int sys_execve(const char* filename, char** argv, char** envp)
 		// a type can implement load_exec, load_module, or both.
 		if( type->load_exec )
 		{
-			if( type->check_exec(exec) != 0 ){
+			if( (check = type->check_exec(filename, exec)) != EXEC_INVALID ){
 				break;
 			}
 		}
@@ -117,52 +143,21 @@ int sys_execve(const char* filename, char** argv, char** envp)
 		return -ENOEXEC;
 	}
 	
-	// Count the arguments
-	u32 argc = 0;
+	// Calculate total stack size for the argument strings
 	u32 argsz = 0;
-	for(; argv[argc]; argc++){
-		argsz += strlen(argv[argc]) + 1;
-	}
-	// Count the environment
-	u32 envc = 0;
+	for(u32 i = 0; i < exec->argc; ++i) argsz += strlen(exec->argv[i])+1;
 	u32 envsz = 0;
-	for(; envp[envc]; envc++){
-		envsz += strlen(envp[envc]) + 1;
-	}
-	
+	for(u32 i = 0; i < exec->envc; ++i) envsz += strlen(exec->envp[i])+1;
+		
 	// Enough room for the arrays and the strings themselves
-	size_t total_argsz = argsz + envsz + sizeof(char*)*(envc+1) + sizeof(char*)*(argc+1);
+	size_t total_argsz = argsz + envsz;
+	total_argsz += sizeof(char*)*(exec->envc+1) + sizeof(char*)*(exec->argc+1);
 	// Check if we are requesting too much space
 	if( total_argsz > TASK_MAX_ARG_SIZE ){
 		return file_close(filp);
 		kfree(exec);
 		return -E2BIG;
 	}
-	
-	// Allocate some kernel memory for the argument/environment
-	void* argtemp = kmalloc(total_argsz);
-	if( argtemp == NULL ){
-		file_close(filp);
-		kfree(exec);
-		return -ENOMEM;
-	}
-
-	// Copy the argument/environment arrays/strings into the kernel memory
-	char* str = (char*)argtemp + sizeof(char*)*(envc+1) + sizeof(char*)*(argc+1);
-	char** nargv = (char**)argtemp;
-	char** nenvp = (char**)( (char*)argtemp + sizeof(char*)*(argc+1) );
-	for(u32 i = 0; i < argc; ++i){
-		nargv[i] = str;
-		strcpy(str, argv[i]);
-		str += strlen(str)+1;
-	}
-	nargv[argc] = NULL;
-	for(u32 i = 0; i < envc; ++i){
-		nenvp[i] = str;
-		strcpy(str, envp[i]);
-		str += strlen(str)+1;
-	}
-	nenvp[envc] = NULL;
 	
 	// Create an empty page directory and free the old one (there's no going back from here...)
 	strip_page_dir(curdir);
@@ -175,22 +170,22 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	
 	// Calculate argument and environment pointers within the users stack
 	argv = (char**)(TASK_STACK_START-total_argsz);
-	envp = (char**)( (char*)argv + sizeof(char*)*(argc+1) );
-	str = (char*)( (char*)envp + sizeof(char*)*(envc+1) );
+	envp = (char**)( (char*)argv + sizeof(char*)*(exec->argc+1) );
+	char* str = (char*)( (char*)envp + sizeof(char*)*(exec->envc+1) );
 	
 	// Copy the argument/environment arrays/strings into the users stack
-	for(u32 i = 0; i < argc; ++i){
+	for(u32 i = 0; i < exec->argc; ++i){
 		argv[i] = str;
-		strcpy(str, nargv[i]);
+		strcpy(str, exec->argv[i]);
 		str += strlen(str)+1;
 	}
-	argv[argc] = NULL;
-	for(u32 i = 0; i < envc; ++i){
+	argv[exec->argc] = NULL;
+	for(u32 i = 0; i < exec->envc; ++i){
 		envp[i] = str;
-		strcpy(str, nenvp[i]);
+		strcpy(str, exec->envp[i]);
 		str += strlen(str)+1;
 	}
-	envp[envc] = NULL;
+	envp[exec->envc] = NULL;
 	
 	// Load the executable
 	error = type->load_exec(exec);
@@ -204,6 +199,16 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	*(char***)( (u32)argv - 8 ) = argv;
 	*(char***)( (u32)argv - 4 ) = envp;
 	*(int*)( (u32)argv - 12 ) = argc;
+	
+	// Free the kernel argument pointers
+	for(u32 i = 0; i < exec->argc; ++i) kfree(exec->argv[i]);
+	kfree(exec->argv);
+	for(u32 i = 0; i < exec->envc; ++i) kfree(exec->envp[i]);
+	kfree(exec->envp);
+	
+	// These are only valid within this page directory though...
+	exec->argv = argv;
+	exec->envp = envp;
 	
 	// Fill the Registers structure so we start at the correct place
 	// and in user mode

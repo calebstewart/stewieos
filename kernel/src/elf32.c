@@ -24,7 +24,7 @@ int elf_relocate(struct file* file, Elf32_Ehdr* ehdr, Elf32_Shdr* shtab, Elf32_R
 int elf_resolve(struct file* file, Elf32_Ehdr* ehdr, Elf32_Sym* symbol, char* strtab, size_t symstrlen);
 void elf_allocate_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
 void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw);
-int elf_check_exec(exec_t* exec);
+int elf_check_exec(const char* filename, exec_t* exec);
 
 // Defines the elf executable loader interface
 exec_type_t elf_exec_type = {
@@ -81,7 +81,7 @@ void elf_modify_range(Elf32_Addr start, Elf32_Addr end, int user, int rw)
 	}
 }
 
-int elf_check_exec(exec_t* exec)
+int elf_check_exec(const char* filename ATTR((unused)), exec_t* exec)
 {
 	Elf32_Ehdr* ehdr = (Elf32_Ehdr*)exec->buffer;
 	

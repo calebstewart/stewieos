@@ -30,60 +30,29 @@
 
 int initfs_install(multiboot_info_t* mb);
 
-// This worker task will run for 10 seconds and exit. It's only use is for testing worker_spawn
-void worker_func(void*);
-void worker_func(void* context)
-{
-	syslog(KERN_WARN, "Worker task %d is running with context 0x%X.", current->t_pid, context);
-	tick_t finish = TIMER_IN(timer_get_freq()*10);
-	while( timer_get_ticks() < finish ){
-		task_sleep(current, 1000);
-		//if( timer_get_ticks() >= wait_until ){
-			syslog(KERN_WARN, "Worker task %d is working...", current->t_pid);
-		//	wait_until += timer_get_freq();
-		//}
-	}
-	syslog(KERN_WARN, "Worker task %d is finished. Exiting...", current->t_pid);
-	sys_exit(0);
-}
-
-void sem_test(void* context);
-void sem_test(void* context)
-{
-	sem_t* sem = (sem_t*)context;
-	
-	syslog(KERN_WARN, "Worker %d waiting on semaphore for at most 0.5 seconds...", current->t_pid);
-	if( sem_wait(sem, 1000) != 0 ){
-		syslog(KERN_WARN, "Worker %d timed out while waiting. Exiting...", current->t_pid);
-		return;
-	}
-	
-	syslog(KERN_WARN, "Worker %d aquired a unit. Going to sleep for 4 seconds.", current->t_pid);
-	
-	task_sleep(current, 4000);
-	
-	sem_signal(sem);
-	
-	syslog(KERN_WARN, "Worker %d released a unit. Exiting...", current->t_pid);
-	
-	return;
-}
-
 int kmain( multiboot_info_t* mb );
 int kmain( multiboot_info_t* mb )
 {	
 	int result = 0;
+	
+	// Offset the multiboot info pointer for the higher half
 	mb = (multiboot_info_t*)( (u32)mb + KERNEL_VIRTUAL_BASE );
-	//clear_screen();
+	
+	// Initialize the GDT and IDT tables, then enable interrupts
 	initialize_descriptor_tables();
 	asm volatile("sti");
-	init_timer(1000); // init the timer at 1000hz
+	
+	// Initialize the timer at 1000hz
+	init_timer(1000);
+	
+	// initialize the page tables and enable paging
 	printk("Initializing paging... \n");
-	init_paging(mb); // initialize the page tables and enable paging
+	init_paging(mb);
 
+	// Grab the CPU Vendor String
+	// This isn't useful, but it is interesting, I guess...
 	char cpu_vendor[16] = {0};
 	u32 max_code = cpuid_string(CPUID_GETVENDORSTRING, cpu_vendor);
-	
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
 	
 	printk("Initializing virtual filesystem... \n");
@@ -111,19 +80,26 @@ int kmain( multiboot_info_t* mb )
 	}
 	
 	printk("Creating initfs disk nodes...\n");
+	
+	// Iterate through all possible IDE devices
+	// and see which ones are present
 	dev_t devid;
 	for(int d = 0; d < 4; ++d)
 	{
 		for(int p = 0; p <= 4; ++p)
 		{
+			// Create the device id
 			devid = makedev(0, (d | (p << 4)));
+			// Check if it is present
 			if( get_block_device(devid) == NULL ) continue;
+			// Create the device file path name
 			char pathname[256] = {0};
 			if( p != 0 ){
 				sprintf(pathname, "/hd%c%d", 'a'+(char)d, p);
 			} else {
 				sprintf(pathname, "/hd%c", 'a'+(char)d);
 			}
+			// Create the fs node
 			error = sys_mknod(pathname, S_IFBLK, devid);
 			if( error != 0 ){
 				printk("%s: unable to create filesystem node: %d\n", pathname, error);
@@ -134,12 +110,9 @@ int kmain( multiboot_info_t* mb )
 	
 	printk("Loading Ext2 Filesystem Support...\n");
 	e2_install_filesystem();
-	//error = sys_insmod("/ext2fs.o");
 	if( error != 0 ){
 		printk("Unable to load module ext2fs.o. error code %d\n", error);
 	}
-	//printk("Setting up Ext2 filesystem support... \n");
-	//e2_setup();
 	
 	// Mount the Ext2 Filesystem from the root hard disk partition
 	printk("Mounting /hda1 to /...\n");
@@ -192,17 +165,6 @@ int kmain( multiboot_info_t* mb )
 		syslog(KERN_NOTIFY, "INIT: unable to execute %s. error code %d", INIT, error);
 		syslog(KERN_NOTIFY, "INIT: killing forked init task...");
 		sys_exit(-1);
-	}
-	
-	// Spawn a dummy worker task for testing (will exit after 10 seconds)
-	//pid_t worker;
-	//worker = worker_spawn(worker_func, (void*)0xDEADBEEF);
-	//syslog(KERN_NOTIFY, "Spawned worker task on pid %d", worker);
-	
-	sem_t* sem = sem_alloc(2);
-	//pid_t worker[3];
-	for(int i = 0; i < 3; ++i){
-		worker_spawn(sem_test, sem);
 	}
 	
 	enablei();
