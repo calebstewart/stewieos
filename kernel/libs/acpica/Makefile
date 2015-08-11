@@ -11,6 +11,7 @@ ACPICA_ARCHIVE_NAME:=acpica-unix-20150717.tar.gz
 ACPICA_ARCHIVE_URL:=https://acpica.org/sites/acpica/files
 DOWNLOADER:=wget -N
 TAR:=tar
+# If you'd prefer curl for whatever reason...
 #DOWNLOADER:=curl -O
 
 ACPICA_DIR:=acpica
@@ -19,6 +20,7 @@ ACPICA_DIR:=acpica
 LIBDIR=../
 LIB:=$(LIBDIR)/libacpica.a
 
+# Path to the acenv.h file
 ACENV:=$(ACPICA_DIR)/source/include/platform/acenv.h
 
 # Compile Options
