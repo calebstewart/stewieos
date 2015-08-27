@@ -96,7 +96,7 @@ void syslog(int level, const char* format, ...)
 	if( syslog_pipe != NULL ){
 		file_write(syslog_pipe, buffer2, strlen(buffer2));
 	} //else {
-		printk("%s\n", buffer);
+		printk(buffer2);
 	//}
 	
 }

@@ -60,7 +60,7 @@ void init_paging( multiboot_info_t* mb )
 	memset(physical_frame, (int)0xFFFFFFFF, physical_frame_count/8);
 	
 	if( !(mb->flags & MULTIBOOT_INFO_MEM_MAP) ) {
-		printk("\n%2Verror: no memory map included from the bootloader! Unable to boot...\n");
+		printk("\nerror: no memory map included from the bootloader! Unable to boot...\n");
 		asm volatile("cli;hlt");
 	}
 	
@@ -71,7 +71,7 @@ void init_paging( multiboot_info_t* mb )
 		((u32)mmap) < mmap_end;\
 		mmap = (multiboot_memory_map_t*)((u32)mmap + mmap->size + sizeof(multiboot_uint32_t)))
 	{
-		printk("%1Vmemory block: %p-%p (%s)\n", (u32)mmap->addr, (u32)mmap->addr + (u32)mmap->len - 1, mmap->type == 1 ? "Available" : "Reserved");
+		printk("memory block: %p-%p (%s)\n", (u32)mmap->addr, (u32)mmap->addr + (u32)mmap->len - 1, mmap->type == 1 ? "Available" : "Reserved");
 		if( mmap->type != 1 ) continue;
 		multiboot_uint64_t frame = (u32)mmap->addr;
 		while( frame < (mmap->addr + mmap->len) ){
@@ -360,8 +360,8 @@ void page_fault(struct regs* regs)
 	int reserved = regs->err & 0x8;
 	//int id = regs->err & 0x10;
 	
-	syslog(KERN_PANIC, "%2Vpage_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
-	syslog(KERN_PANIC, "%2Vpage_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
+	syslog(KERN_PANIC, "page_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
+	syslog(KERN_PANIC, "page_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
 	
 	/*
 	syslog(KERN_PANIC, "%2VPAGE FAULT ( %s%s%s%s)Address: 0x%x", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
@@ -375,10 +375,10 @@ void page_fault(struct regs* regs)
 	syslog(KERN_PANIC, "%2VCR3: 0x%X", cr3);
 	syslog(KERN_PANIC, "%2VCS: 0x%XDS: 0x%X", regs->cs, regs->ds);*/
 	
-	syslog(KERN_PANIC, "%2Vpage_fault: killing task %d.", current->t_pid);
+	syslog(KERN_PANIC, "page_fault: killing task %d.", current->t_pid);
 	sys_exit(-1);
 	
-	syslog(KERN_PANIC, "%2Vsystem: unable to kill task. entering infinite loop instead...");
+	syslog(KERN_PANIC, "system: unable to kill task. entering infinite loop instead...");
 	while(1) asm volatile("hlt");
 }
 

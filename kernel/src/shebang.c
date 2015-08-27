@@ -6,6 +6,13 @@
 #include "error.h"
 #include "unistd.h"
 
+exec_type_t shebang_script_type = {
+	.name = "shebang",
+	.descr = "Shebang Script - Handles scripts starting with #! (Shebang)",
+	.load_exec = shebang_load,
+	.check_exec = shebang_check,
+};
+
 int shebang_load(exec_t* exec)
 {
 	return 0;
@@ -33,10 +40,17 @@ int shebang_check(const char* filename, exec_t* exec)
 	
 	// they didn't give an interpreter
 	if( nargs == 0 ){
-		return EXEC_INVALID;
+		return -ENOENT;
 	}
 	
 	char** argv = (char**)kmalloc(sizeof(char*)*(nargs+exec->argc+1));
+	
+	for(size_t i = 0; interp[i] != 0; ++i){
+		if( interp[i] == '\n' ){
+			interp[i] = 0;
+			break;
+		}
+	}
 	
 	// Allocate space for the new arguments
 	size_t i = 0;
@@ -48,11 +62,11 @@ int shebang_check(const char* filename, exec_t* exec)
 	} while( (token = strtok(NULL, " ")) != NULL );
 	
 	argv[i] = (char*)kmalloc(strlen(filename)+1);
-	strcpy(argv[i+1], filename);
+	strcpy(argv[i++], filename);
 	
 	// copy all the other arguments (includign the null terminating one)
 	for(; i <= (nargs+exec->argc); ++i){
-		argv[i] = exec->argv[i-nargs+1];
+		argv[i] = exec->argv[i-nargs];
 	}
 	
 	// Free the old arguments array
@@ -61,25 +75,28 @@ int shebang_check(const char* filename, exec_t* exec)
 	
 	// Save the new arguments
 	exec->argv = argv;
-	exec->argc = nargs + exec->argc - 1;
-	
-	file_close(exec->file);
+	exec->argc = nargs + exec->argc;
 	
 	struct path path;
 	int error = path_lookup(argv[0], WP_DEFAULT, &path);
 	if( error != 0 ){
-		return EXEC_INVALID;
+		return -ENOENT;
 	}
 	
+	struct file* old_file = exec->file; // save the old file (the script)
 	exec->file = file_open(&path, O_RDONLY);
 	path_put(&path);
 	
 	if( IS_ERR(exec->file) ){
-		return EXEC_INVALID;
+		exec->file = old_file; // reset the old file
+		return -ENOENT;
 	}
+	
+	// close the script
+	file_close(old_file);
 	
 	file_seek(exec->file, 0, SEEK_SET);
 	file_read(exec->file, exec->buffer, 256);
 	
-	return EXEC_VALID;
+	return EXEC_INTERP;
 }

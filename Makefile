@@ -89,7 +89,7 @@ fix_vhd:
 	losetup -d /dev/loop0
 
 install_files:
-	cp -R ./fs_root/* /mnt/
+	cp -R -u ./fs_root/* /mnt/
 
 $(ALLPROJECTS):
 	$(MAKE) -C $(@:all-%=%) all

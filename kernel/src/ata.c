@@ -160,7 +160,8 @@ int ide_initialize( void )
 	
 	// Search for ide device class
 	if( pci_search(ide_class, &device, 1) == NULL ){
-		syslog(KERN_WARN, "ide: no ide controller found on PCI bus!\n");
+		syslog(KERN_PANIC, "ide: no ide controller found on PCI bus!\n");
+		while(1);
 		return -ENXIO;
 	}
 	
@@ -251,7 +252,7 @@ int ide_initialize( void )
 			{
 				int error = ata_pio_transfer(ide_device[ndevs].channel, ide_device[ndevs].drive, ATA_PIO_READ, 0, 1, ide_buffer);
 				if( error != 0 ){
-					printk("ide: unable to read Master Boot Record: %d\n", error);
+					syslog(KERN_ERR, "ide: unable to read MBR on device %d: %d", ndevs, error);
 				} else {
 					if( ide_buffer[0x1fe] != 0x55 || ide_buffer[0x1ff] != 0xAA ){
 						printk("ide: device%d: bootsector signature is invalid. Assuming no partition table.\n", ndevs);

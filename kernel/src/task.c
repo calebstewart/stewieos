@@ -807,11 +807,16 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 			// this task is in the group which we are the leader of or
 			// this task is in the specified group
 			// we should store the status and return the pid
-			if( T_ISZOMBIE(task) && (pid == -1 || (pid == 0 && task->t_gid == current->t_pid) || (pid < -1 && task->t_pid == (-pid))) ){
-				if( status )
-					*status = task->t_status;
-				pid = task->t_pid;
-				need_wait = 0;
+			if( T_ISZOMBIE(task) )
+			{
+				if( pid == -1 || 
+					(pid == 0 && task->t_gid == current->t_gid) ||
+					(pid < -1 && task->t_pid == (-pid)) )
+				{
+					if( status ) *status = task->t_status;
+					pid = task->t_pid;
+					need_wait = 0;
+				}
 			}
 		}
 	}
@@ -931,4 +936,16 @@ int task_sleep(struct task* task, u32 milli)
 	task_wait(data->task, TF_WAITIO);
 	
 	return 0;
+}
+
+pid_t task_setsid( void )
+{
+	// We cannot create a new session if we are a process group
+	// leader
+	if( current->t_gid == current->t_pid ){
+		return (pid_t)-1;
+	}
+	
+	// Session, Group, and Process IDs are all the same
+	return (current->t_gid = current->t_sid = current->t_pid);
 }

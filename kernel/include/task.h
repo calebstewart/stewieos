@@ -75,6 +75,7 @@ struct task
 {
 	pid_t				t_pid;					// process id
 	pid_t				t_gid;					// process group id
+	pid_t				t_sid;					// session id
 	uid_t				t_uid;
 	u32					t_flags;				// the flags/state of this task
 	u32					t_esp;					// the stack pointer
@@ -120,6 +121,8 @@ void task_wakeup(struct task* task);
 
 pid_t task_getfg( void );
 void task_setfg(pid_t pid);
+
+pid_t task_setsid( void );
 
 // detach a task from its parent and relinquish foregroundness, if needed, to the parent
 void task_detach(pid_t pid);

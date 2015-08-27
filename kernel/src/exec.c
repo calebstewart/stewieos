@@ -75,6 +75,10 @@ int sys_execve(const char* filename, char** argv, char** envp)
 		return error;
 	}
 	
+	if( path_access(&path, X_OK) != 0 ){
+		return -EPERM;
+	}
+	
 	// Open the file
 	struct file* filp = file_open(&path, O_RDONLY);
 	// We don't need the path reference anymore
@@ -130,8 +134,14 @@ int sys_execve(const char* filename, char** argv, char** envp)
 		// a type can implement load_exec, load_module, or both.
 		if( type->load_exec )
 		{
-			if( (check = type->check_exec(filename, exec)) != EXEC_INVALID ){
-				break;
+			check = type->check_exec(filename, exec);
+			if( check == EXEC_VALID ) break; // valid
+			else if( check == EXEC_INTERP ) { // restart the search
+				type = g_exec_type;
+				continue;
+			} else if( check != EXEC_INVALID ) {
+				// right type, but had some other error
+				return check;
 			}
 		}
 		type = type->next;
@@ -198,7 +208,7 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	// These are the actual arguments to main (argv and envp)
 	*(char***)( (u32)argv - 8 ) = argv;
 	*(char***)( (u32)argv - 4 ) = envp;
-	*(int*)( (u32)argv - 12 ) = argc;
+	*(int*)( (u32)argv - 12 ) = exec->argc;
 	
 	// Free the kernel argument pointers
 	for(u32 i = 0; i < exec->argc; ++i) kfree(exec->argv[i]);

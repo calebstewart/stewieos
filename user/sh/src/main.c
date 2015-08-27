@@ -38,7 +38,7 @@ static char* find_exec(const char* name, char* buffer, char* path)
 	char* colon = NULL;
 	
 	if( *name == '/' ){
-		if( access(name, F_OK | X_OK) != 0 ){
+		if( access(name, F_OK) != 0 ){
 			return NULL;
 		} else {
 			strcpy(buffer, name);
@@ -51,7 +51,7 @@ static char* find_exec(const char* name, char* buffer, char* path)
 		colon = strchrnul(path, ':');
 		old_value = *colon;
 		sprintf(buffer, "%s/%s", path, name);
-		if( access(buffer, F_OK | X_OK) == 0 ){
+		if( access(buffer, F_OK) == 0 ){
 			return buffer;
 		}
 		*colon = old_value;
@@ -111,9 +111,9 @@ static int shell_read_line(FILE* outfl, FILE* filp, size_t* lineno, char* buffer
 		iter++;
 	}
 	
-	if( c == EOF ){
-		return -1;
-	}
+// 	if( c == EOF ){
+// 		return -1;
+// 	}
 	
 	if( ((size_t)(iter-buffer)) == length ){
 		fprintf(stderr, "error: buffer overflow. line too long.\n");
@@ -126,7 +126,19 @@ static int shell_read_line(FILE* outfl, FILE* filp, size_t* lineno, char* buffer
 }
 
 int main(int argc, char** argv, char** envp)
-{	
+{
+	
+	if( argc != 1 )
+	{
+		FILE* file = fopen(argv[1], "r");
+		if( file == NULL ){
+			perror("unable to run script");
+			return -1;
+		}
+		shell(stdout, file, envp);
+		return 0;
+	}
+	
 	shell(stdout, stdin, envp);
 	
 	return 0;
@@ -188,7 +200,7 @@ void shell(FILE* outfl, FILE* filp, char** envp)
 		
 		length = strlen(line);
 		
-		if( length == 0 ){
+		if( length == 0 || line[0] == '#' ){
 			continue;
 		}
 		

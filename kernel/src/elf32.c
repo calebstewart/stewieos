@@ -86,10 +86,10 @@ int elf_check_exec(const char* filename ATTR((unused)), exec_t* exec)
 	Elf32_Ehdr* ehdr = (Elf32_Ehdr*)exec->buffer;
 	
 	if( elf_check_ident(ehdr, ET_EXEC) != 0 ){
-		return 0;
+		return EXEC_INVALID;
 	}
 	
-	return 1;
+	return EXEC_VALID;
 }
 
 int elf_load_exec(exec_t* exec)

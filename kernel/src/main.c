@@ -27,6 +27,7 @@
 #include "ps2.h"
 #include "sem.h"
 #include "acpi/acpi.h"
+#include "shebang.h"
 
 int initfs_install(multiboot_info_t* mb);
 
@@ -69,6 +70,9 @@ int kmain( multiboot_info_t* mb )
 	
 	printk("Registering elf32 executable type... \n");
 	elf_register();
+	
+	printk("Registering Shebang Script executable type... \n");
+	register_exec_type(&shebang_script_type);
 	
 	printk("Loading initfs tarball... \n");
 	initfs_install(mb);

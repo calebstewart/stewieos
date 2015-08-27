@@ -4,9 +4,9 @@
 #include "fs.h"
 #include "linkedlist.h"
 
-#define EXEC_VALID 1
-#define EXEC_INVALID 0
-#define EXEC_INTERP 2
+#define EXEC_VALID 0
+#define EXEC_INTERP 1
+#define EXEC_INVALID 2
 
 // Define the module info structure for a loadable module
 #define MODULE_INFO(name, load, remove) module_t __moduel_info __attribute__((section(".module_info"))) = { .m_name=(name), .m_load=(load), .m_remove=(remove) }

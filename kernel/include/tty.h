@@ -55,6 +55,14 @@ struct _tty_driver
 	tty_device_t device[];
 };
 
+/* External Interfaces (Forward Facing) */
+tty_device_t* tty_find_device(dev_t device);
+tty_driver_t* tty_find_driver(dev_t device);
+void tty_device_insert(tty_device_t* device, char c);
+char tty_device_remove(tty_device_t* device);
+ssize_t tty_device_read(tty_device_t* device, char* buffer, size_t count);
+
+
 int tty_queue_empty(tty_device_t* device); // check if the queue is empty 
 void tty_queue_insert(tty_device_t* device, char c); // insert a character to be read
 char tty_queue_remove(tty_device_t* device); // remove the last inserted character

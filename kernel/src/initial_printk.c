@@ -43,6 +43,7 @@ static char output_level_colors[3] = {
 	0x01,				// Output level 2, Blue on black
 	0x04,				// Output level 3, Red on black
 };
+static int last_char = '\n';
 
 //int(*internal_printk)(const char*,__builtin_va_list) = initial_printk;
 
@@ -406,12 +407,13 @@ int internal_printk(const char* format, __builtin_va_list ap)
 			
 			
 		} else { // end format == '%'
+// 			if( last_char == '\n' ){
+// 				put_char('[',0,0,0);
+// 				put_uint(timer_get_ticks(), 0,0,0, 10);
+// 				put_str("] ",0,0,0);
+// 			}
 			put_char(*format, 0, 0, 0);
-			if( *format == '\n' ){
-				put_char('[',0,0,0);
-				put_uint(timer_get_ticks(), 0,0,0, 10);
-				put_str("] ",0,0,0);
-			}
+			last_char = *format;
 			format++;
 			count++;
 		} // end format != '%'
