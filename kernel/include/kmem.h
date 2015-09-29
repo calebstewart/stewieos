@@ -3,6 +3,8 @@
 
 #include "kernel.h"
 
+#define kernel_alloc(type) (type*)kmalloc(sizeof(type))
+
 /* Function: kmalloc* family
  * Parameters:
  * 	size_t size -- The size of the buffer to be allocated

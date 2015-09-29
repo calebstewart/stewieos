@@ -19,6 +19,10 @@ struct list
 
 #define list_for_each(item, head) for( item = (head)->next; item != head; item = (item)->next )
 
+#define list_for_each_entry(item, head, type, member, entry) for( item = (head)->next, entry = list_entry(item, type, member); item != head; item = (item)->next, entry = list_entry(item, type, member) )
+
+#define list_finish_for_each(item, head) item = (head)->prev
+
 #define list_next(item, type, member, head) ( (item)->next == head ? (type*)(NULL) : list_entry((item)->next, type, member) )
 
 #define list_is_last(item, head) ((item)->next == head)

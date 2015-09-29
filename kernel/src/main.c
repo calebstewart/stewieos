@@ -28,6 +28,7 @@
 #include "sem.h"
 #include "acpi/acpi.h"
 #include "shebang.h"
+#include "event.h"
 
 int initfs_install(multiboot_info_t* mb);
 
@@ -55,7 +56,7 @@ int kmain( multiboot_info_t* mb )
 	char cpu_vendor[16] = {0};
 	u32 max_code = cpuid_string(CPUID_GETVENDORSTRING, cpu_vendor);
 	printk("CPU Vendor String: %s (maximum supported cpuid code: %d)\n", &cpu_vendor[0], max_code);
-	
+
 	printk("Initializing virtual filesystem... \n");
 	initialize_filesystem();
 	
@@ -64,6 +65,9 @@ int kmain( multiboot_info_t* mb )
 	
 	printk("Initializing multitasking subsystem... \n");
 	task_init();
+
+	printk("Initializing event subsystem...\n");
+	event_init();
 	
 	printk("Initializing PS/2 Layer...\n");
 	ps2_init();

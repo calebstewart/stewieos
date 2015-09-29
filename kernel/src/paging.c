@@ -566,5 +566,6 @@ void display_page_dir(page_dir_t* dir)
 		if( addr == ((u32)(-0x1000)) ) break;
 		addr += 0x1000;
 	}
+	syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
 	
 }

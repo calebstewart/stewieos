@@ -42,6 +42,7 @@ struct _module
 	int m_refs;			// Number of references currently held throughout the system
 	
 	list_t m_link;			// Link in the kernel module list
+	void* m_private;		// Private module data
 };
 
 /* type: exec_type_t

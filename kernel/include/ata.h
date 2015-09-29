@@ -18,9 +18,9 @@
 #define ATA_DEVICE_CONTROL(HOB, SRST, nIEN) ((u8)( (HOB << 7) | (SRST << 2) | (nIEN << 1) ))
 
 // Find Byte Size of Sector Count
-#define ATA_SECTOR_TO_BYTE(sectors)	( (sectors) * 512 )
-#define ATA_BYTE_TO_SECTOR(bytes)	( (bytes) / 512 )
 #define ATA_SECTOR_SIZE			512
+#define ATA_SECTOR_TO_BYTE(sectors)	( (sectors) * ATA_SECTOR_SIZE )
+#define ATA_BYTE_TO_SECTOR(bytes)	( (bytes) / ATA_SECTOR_SIZE )
 
 // Command/Status Port Flags
 #define ATA_SR_BSY	0x80

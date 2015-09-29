@@ -7,10 +7,17 @@
 
 enum _event_type
 {
-	ET_KEY = (1<<0),
-	ET_ABS = (1<<1),
-	ET_REL = (1<<2),
-	ET_LED = (1<<3),
+	EVENT_KEY = (1<<0),
+	EVENT_ABSOLUTE = (1<<1),
+	EVENT_RELATIVE = (1<<2),
+	EVENT_LED = (1<<3),
+};
+
+// Event results returned from handlers
+enum _event_result
+{
+	EVENT_REMOVE, // remove the event from the queue. No other handlers will process it
+	EVENT_CONTINUE, // Continue letting other handlers process the event (consume it)
 };
 
 enum _led_events
@@ -38,10 +45,11 @@ typedef struct _event
 	u32 ev_type; // event type
 	u32 ev_event; // event code
 	u32 ev_value; // event data
+	list_t ev_link; // link in the event list
 } event_t;
 
 /* Event handler event notification function */
-typedef void(*event_handler_func_t)(event_t*, void*);
+typedef int(*event_handler_func_t)(event_t*, void*);
 
 /* Event handler data */
 typedef struct _event_handler
@@ -52,11 +60,16 @@ typedef struct _event_handler
 	list_t eh_link; // link in the handler list
 } event_handler_t;
 
+/* Initialize the event subsystem */
+int event_init( void );
+
 /* Raise a system event */
 int event_raise(u32 type, u32 event, u32 value);
 /* Register an event handler function */
-int event_listen(u32 mask, event_handler_func_t event, void* data);
+event_handler_t* event_listen(u32 mask, event_handler_func_t event, void* data);
 /* Remove a previous listen registration */
-int event_unlisten(u32 mask, event_handler_func_t event);
+int event_unlisten(event_handler_t* handler);
+
+void event_monitor(void* unused);
 
 #endif

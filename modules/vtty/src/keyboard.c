@@ -6,7 +6,7 @@
 #include <ps2.h>
 #include <event.h>
 
-void kbd_listen(event_t* event, void* data);
+int kbd_listen(event_t* event, void* data);
 
 static char keymap[KEY_COUNT] = { [0 ... KEY_COUNT-1] = KEY_RELEASED };
 static char vkey_std[128] = {
@@ -61,24 +61,31 @@ char vkey_convert(vkey_t key, const char* map)
 	}
 }
 
-int keyboard_init(module_t* module __attribute__((unused)), tty_device_t* device __attribute__((unused)))
+int keyboard_init(module_t* module, tty_device_t* device __attribute__((unused)))
 {
 	// Register an event listener for the system-wide key events
-	event_listen(ET_KEY, kbd_listen, NULL);
+	event_handler_t* handler = event_listen(EVENT_KEY, kbd_listen, NULL);
+	if( handler == NULL ){
+		syslog(KERN_ERR, "unable to register key event listener for vtty!");
+		return -ENODEV;
+	}
+
+	module->m_private = (void*)handler;
+
 	return 0;
 }
 
-int keyboard_quit(module_t* module __attribute__((unused)))
+int keyboard_quit(module_t* module)
 {
-	event_unlisten(ET_KEY, kbd_listen);
+	event_unlisten((event_handler_t*)module->m_private);
 	return 0;
 }
 
-void kbd_listen(event_t* event, void* data ATTR((unused)))
+int kbd_listen(event_t* event, void* data ATTR((unused)))
 {
 	
 	if( event->ev_event == KEY_UNKNOWN ){
-		return;
+		return EVENT_CONTINUE;
 	}
 	
 	if( event->ev_value == KEY_PRESSED )
@@ -99,8 +106,10 @@ void kbd_listen(event_t* event, void* data ATTR((unused)))
 		}
 		u32 led = LED_CAPSLOCK;
 		if( event->ev_event == KEY_NUMLOCK ) led = LED_NUMLOCK;
-		event_raise(ET_LED, led, keymap[event->ev_event]); // raise a led event
+		event_raise(EVENT_LED, led, keymap[event->ev_event]); // raise a led event
 	} else {
 		keymap[event->ev_event] = event->ev_value;
 	}
+
+	return EVENT_CONTINUE;
 }

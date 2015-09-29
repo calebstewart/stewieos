@@ -42,6 +42,9 @@
 
 #define info_message(fmt, ...) syslog(KERN_NOTIFY, "%s: " fmt, MODULE_NAME, __VA_ARGS__)
 
+// Use the builtin popcount for the most efficient bit counting routine
+#define BITCOUNT(x)     __builtin_popcount(x)
+
 /* enum cpuid_requests
  * purpose:
  * 	defines known values for cpuid request codes

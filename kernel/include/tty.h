@@ -56,11 +56,47 @@ struct _tty_driver
 };
 
 /* External Interfaces (Forward Facing) */
-tty_device_t* tty_find_device(dev_t device);
+/*tty_device_t* tty_find_device(dev_t device);
 tty_driver_t* tty_find_driver(dev_t device);
 void tty_device_insert(tty_device_t* device, char c);
 char tty_device_remove(tty_device_t* device);
-ssize_t tty_device_read(tty_device_t* device, char* buffer, size_t count);
+ssize_t tty_device_read(tty_device_t* device, char* buffer, size_t count);*/
+
+/* Driver API Functions */
+
+/* Allocate a new driver structure
+ * 
+ * Reserves enough space for the given number of minors
+ * and optionally initializes all minors if alloc_minors
+ * is non-zero. 
+ */
+/*tty_driver_t* tty_alloc_driver(const char* name,
+							   dev_t devid,
+							   unsigned int nminors,
+							   unsigned int alloc_minors
+  							);*/
+/* Free a driver structure.
+ * 
+ * This may only happen there are no references
+ * currently being held for this driver.
+ */
+//void tty_free_driver(tty_driver_t* driver);
+/* Attach a new TTY device to the driver
+ * 
+ * If minor >= 0, then the new device takes on the given
+ * minor number. Otherwise, it will search for an open
+ * minor number to use. If the given minor number already
+ * exists or is out of range, ERR_PTR(-EINVAL) is returned and the
+ * device is left unchanged.
+ */
+tty_device_t* tty_attach_device(tty_driver_t* driver, int minor);
+/* Detaches the specified tty device
+ * 
+ * This may only happen if there are no references left
+ * to the tty device. There is no garuntee that the device
+ * pointer will be valid after calling this function.
+ */
+int tty_detach_device(tty_device_t* device);
 
 
 int tty_queue_empty(tty_device_t* device); // check if the queue is empty 

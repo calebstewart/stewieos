@@ -1,0 +1,15 @@
+{
+	"name": "ttymon",
+	"implements": [
+		{
+			"name": "start",
+		},
+		{
+			"name": "stop",
+		},
+		{
+			"name": "restart",
+			"pre": ["stop", "start"]
+		}
+	]
+}

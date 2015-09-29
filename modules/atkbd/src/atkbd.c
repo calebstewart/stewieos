@@ -87,7 +87,7 @@ void kbd_event(u8 port ATTR((unused)), u8 sc)
 // 	};
 	
 	// BROADCAST!
-	event_raise(ET_KEY, key, atkbd_state);
+	event_raise(EVENT_KEY, key, atkbd_state);
 	
 	// Reset the flags
 	atkbd_state = KEY_PRESSED;

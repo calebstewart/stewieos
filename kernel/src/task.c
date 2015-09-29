@@ -487,13 +487,8 @@ pid_t task_spawn(int kern)
 	} else {
 		task->t_parent = NULL;
 		init_task_vfs(&task->t_vfs);
-		
-// 		syslog(KERN_WARN, "Current Page Directory");
-// 		display_page_dir(current->t_dir);
-// 		syslog(KERN_WARN, "Kernel Page Directory");
-// 		display_page_dir(kerndir);
-		
 		task->t_dir = copy_page_dir(current->t_dir);
+		strip_page_dir(task->t_dir);
 	}
 	
 	if( !task->t_dir ){

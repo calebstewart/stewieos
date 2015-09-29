@@ -1,0 +1,20 @@
+#!/bin/sh
+# Used to start, or stop the virtual terminal service
+
+case $1 in
+	start)
+		# Do something to start the virtual terminals
+		# something like:
+		# /sbin/ttymon &
+		# echo $! > ./ttymon.pid
+		;;
+	stop)
+		# Do something to stop the virtual terminals
+		# something like:
+		# kill -s SIGTERM `cat ./ttymon.pid`
+		# rm ./ttymon.pid
+		;;
+	*)
+		echo "$0: unrecognized action: $1"
+		;;
+esac

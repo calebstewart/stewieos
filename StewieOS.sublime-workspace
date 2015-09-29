@@ -1,0 +1,964 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "kernel/src/task.c",
+			"settings":
+			{
+				"buffer_size": 24657,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "kernel/include/task.h",
+			"settings":
+			{
+				"buffer_size": 4709,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "StewieOS.sublime-project",
+			"settings":
+			{
+				"buffer_size": 672,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "kernel/src/paging.c",
+			"settings":
+			{
+				"buffer_size": 16263,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "kernel/src/main.c",
+			"settings":
+			{
+				"buffer_size": 5109,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "kernel/src/kmem.c",
+			"settings":
+			{
+				"buffer_size": 15584,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "Makefile",
+	"build_system_choices":
+	[
+		[
+			[
+				[
+					"Makefile",
+					""
+				],
+				[
+					"Makefile",
+					"All"
+				],
+				[
+					"Makefile",
+					"Clean"
+				],
+				[
+					"Makefile",
+					"Install To VHD"
+				],
+				[
+					"Makefile",
+					"Clean Build"
+				]
+			],
+			[
+				"Makefile",
+				"Install To VHD"
+			]
+		],
+		[
+			[
+				[
+					"Makefile",
+					""
+				],
+				[
+					"Makefile",
+					"All"
+				],
+				[
+					"Makefile",
+					"Clean"
+				],
+				[
+					"Makefile",
+					"Install To VHD"
+				],
+				[
+					"Makefile",
+					"Clean Build"
+				],
+				[
+					"Makefile",
+					"Qemu Emulator"
+				]
+			],
+			[
+				"Makefile",
+				"Qemu Emulator"
+			]
+		],
+		[
+			[
+				[
+					"Makefile",
+					""
+				],
+				[
+					"Makefile",
+					"All"
+				],
+				[
+					"Makefile",
+					"Clean"
+				],
+				[
+					"Makefile",
+					"Install To VHD"
+				],
+				[
+					"Makefile",
+					"Clean Build"
+				],
+				[
+					"Makefile",
+					"Qemu Emulator"
+				],
+				[
+					"Makefile",
+					"Qemu Emulator (Debug)"
+				]
+			],
+			[
+				"Makefile",
+				"Qemu Emulator"
+			]
+		],
+		[
+			[
+				[
+					"Makefile",
+					""
+				],
+				[
+					"Makefile",
+					"Build All"
+				],
+				[
+					"Makefile",
+					"Flash Chip"
+				]
+			],
+			[
+				"Makefile",
+				"Build All"
+			]
+		],
+		[
+			[
+				[
+					"Makefile",
+					""
+				],
+				[
+					"Makefile",
+					"Build All"
+				],
+				[
+					"Makefile",
+					"Flash Chip"
+				],
+				[
+					"Makefile",
+					"Clean Build"
+				]
+			],
+			[
+				"Makefile",
+				"Clean Build"
+			]
+		],
+		[
+			[
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					""
+				],
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					"Run"
+				],
+				[
+					"Packages/Makefile/Make.sublime-build",
+					""
+				],
+				[
+					"Packages/Makefile/Make.sublime-build",
+					"Clean"
+				]
+			],
+			[
+				"Packages/Makefile/Make.sublime-build",
+				""
+			]
+		]
+	],
+	"build_varint": "Qemu Emulator",
+	"command_palette":
+	{
+		"height": 392.0,
+		"last_filter": "Package Control: Install Package",
+		"selected_items":
+		[
+			[
+				"Package Control: Install Package",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 449.0
+	},
+	"console":
+	{
+		"height": 139.0,
+		"history":
+		[
+			"import urllib.request,os,hashlib; h = 'eb2297e1a458f27d836c04bb0cbaf282' + 'd0e7a3098092775ccb37ca9d6b2e4b7d'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)",
+			"Package Control",
+			"Package Control: Install Package",
+			"import urllib.request,os,hashlib; h = 'eb2297e1a458f27d836c04bb0cbaf282' + 'd0e7a3098092775ccb37ca9d6b2e4b7d'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)"
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/home/caleb/Development/StewieOS",
+		"/home/caleb/Development/StewieOS/kernel",
+		"/home/caleb/Development/StewieOS/kernel/include",
+		"/home/caleb/Development/StewieOS/kernel/src"
+	],
+	"file_history":
+	[
+		"/home/caleb/Documents/First Class Year/Capstone Project/EnvironmentalConstraints.tex",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Project_Documentation/SponsorLetter/SponsorLetter.tex",
+		"/home/caleb/Development/StewieOS/kernel/src/ata.c",
+		"/home/caleb/Development/StewieOS/fs_root/etc/services/ttymon/manifest.json",
+		"/home/caleb/Documents/First Class Year/Morals and Ethics/TermPaperTopicProposal/TermPaperTopicProposal.tex",
+		"/home/caleb/Development/StewieOS/fs_root/etc/services/tty/manifest.json",
+		"/home/caleb/Development/StewieOS/fs_root/etc/services/tty/tty",
+		"/home/caleb/Development/StewieOS/external/bdsh/BD-shell/makefile",
+		"/home/caleb/Development/StewieOS/external/bdsh/BD-shell/src/bdsh.c",
+		"/home/caleb/Development/StewieOS/fs_root/etc/services/tty",
+		"/home/caleb/Development/StewieOS/fs_root/etc/services",
+		"/home/caleb/Development/sddm-theme/urbanlifestyle/Main.qml",
+		"/home/caleb/Development/sddm-theme/Main.qml",
+		"/home/caleb/Development/sddm-theme/Other.qml",
+		"/home/caleb/.config/sublime-text-3/Packages/User/SDDM Greeter.sublime-build",
+		"/home/caleb/Development/StewieOS/.gitignore",
+		"/home/caleb/Development/StewieOS/external/newlib/.gitignore",
+		"/home/caleb/Development/StewieOS/external/template/setup.sh",
+		"/home/caleb/Development/sddm-theme/README.md",
+		"/usr/share/sddm/themes/breeze/theme.conf",
+		"/home/caleb/Development/stewieos/user/test/src/main.c",
+		"/home/caleb/Development/StewieOS/kernel/include/kernel.h",
+		"/home/caleb/Development/StewieOS/kernel/include/paging.h",
+		"/home/caleb/Development/StewieOS/kernel/include/tty.h",
+		"/home/caleb/Development/StewieOS/kernel/include/kmem.h",
+		"/home/caleb/Development/StewieOS/kernel/include/linkedlist.h",
+		"/home/caleb/Development/StewieOS/kernel/include/task.h",
+		"/home/caleb/Development/StewieOS/kernel/src/main.c",
+		"/home/caleb/Development/StewieOS/kernel/src/event.c",
+		"/home/caleb/Development/StewieOS/modules/atkbd/src/atkbd.c",
+		"/home/caleb/Development/StewieOS/modules/vtty/src/keyboard.c",
+		"/home/caleb/Development/StewieOS/kernel/include/event.h",
+		"/home/caleb/Development/StewieOS/StewieOS.sublime-project",
+		"/usr/share/sddm/themes/breeze/Main.qml",
+		"/home/caleb/Development/StewieOS/kernel/include/exec.h",
+		"/home/caleb/Development/StewieOS/bochs.sh",
+		"/home/caleb/Documents/First Class Year/Linear Algebra/ProblemSet1/ProblemSet1.tex",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/include/genset_timer.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/src/genset_sensor.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/avrutil/timer.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/src/timer.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2014-2015/sensor/configuration.h",
+		"/home/caleb/sketchbook/libraries/ASCII_MODBUS/ASCII_MODBUS.cpp",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/include/genset_sensor.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/src/usart.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/avrutil/usart.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/GensetSensor.sublime-project",
+		"/home/caleb/sketchbook/libraries/AVR_ADC/AVR_adc.cpp",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2014-2015/sensor/sensor.ino",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/src/adc.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Project_Documentation/Diagram/ControllerDiagram.graphml",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Project_Documentation/Weekly_Reports/Weekly_Assessment_Template.tex",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Project_Documentation/Weekly_Reports/Week_5_Status_Report.tex",
+		"/home/caleb/.config/sublime-text-3/Packages/User/PDF Latex.sublime-build",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/CircuitTesting/SampledVoltage.m",
+		"/home/caleb/.config/sublime-text-3/Packages/Default/Preferences.sublime-settings",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2014-2015/Arduino_UNO_Sketchbook-master/libraries/ASCII_MODBUS/ASCII_MODBUS.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/sensor-2014-2015/sensor.ino",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/avrutil/modbus.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/src/modbus.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/Makefile",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/include/quick_square.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2014-2015/Arduino_UNO_Sketchbook-master/libraries/ASCII_MODBUS/ASCII_MODBUS.cpp",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/avr_tests/blink/blink.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/include/genset_debug.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/src/genset_debug.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/src/genset_timer.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Power_Calculations/DisplayAndCalcPowerInformation.m",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/GensetSensor/include/genset_lcd.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/avrutil/adc.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/Power_Calculations/PQS.m",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/avrutil/port.h",
+		"/home/caleb/.config/sublime-text-3/Packages/User/Make_Flash.sublime-build",
+		"/home/caleb/.config/sublime-text-3/Packages/User/Preferences.sublime-settings",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/avr_tests/blink/Makefile",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/src/main.c",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/adc.h",
+		"/home/caleb/Documents/First Class Year/Capstone Project/py2/2015-2016/libavrutil/include/port.h"
+	],
+	"find":
+	{
+		"height": 133.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"	pid_t pid = task_spawn(1);\n	\n	if( pid == 0 ){\n		thread(context);\n		sys_exit(0);\n		return pid;\n	} else {\n		return pid;\n	}",
+			"task_init",
+			"alloc_frame",
+			"Welcome",
+			";\n",
+			"task_wak",
+			"20mm",
+			"1V",
+			"ADC_Init",
+			"modbus_",
+			"modbus_\\",
+			"modbus_",
+			"modbus",
+			"MODBUS_slave_is_new",
+			"MODBUS_is_",
+			"MODBUS_slave_is_new_msg",
+			"PHASE_NSAMPLES",
+			"char usart_buffer[USART_BUFFER_LEN];\nuint16_t usart_head = 0;\nuint16_t usart_tail = 0;\n",
+			"size_t",
+			"		port_toggle(B, 0);\n		port_toggle(B, 1);\n		_delay_ms(250);"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"PHASE_SENSOR_NSAMPLES",
+			"uint16_t"
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "kernel/src/task.c",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 24657,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								13283,
+								13283
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								223,
+								8,
+								14,
+								12,
+								15,
+								28,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/kernel/src/task.c",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 5843.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "kernel/include/task.h",
+					"semi_transient": true,
+					"settings":
+					{
+						"buffer_size": 4709,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								223,
+								8,
+								14,
+								12,
+								15,
+								51,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/kernel/include/task.h",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "StewieOS.sublime-project",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 672,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								183,
+								183
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								223,
+								9,
+								26,
+								17,
+								5,
+								17,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/StewieOS.sublime-project",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/JavaScript/JSON.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "kernel/src/paging.c",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 16263,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								4276,
+								4276
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								223,
+								8,
+								11,
+								18,
+								25,
+								18,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/kernel/src/paging.c",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 6121.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "kernel/src/main.c",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5109,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								223,
+								9,
+								26,
+								21,
+								30,
+								22,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/kernel/src/main.c",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 364.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "kernel/src/kmem.c",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 15584,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"c_time":
+							[
+								128,
+								3,
+								99,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								100,
+								97,
+								116,
+								101,
+								116,
+								105,
+								109,
+								101,
+								10,
+								113,
+								0,
+								67,
+								10,
+								7,
+								222,
+								12,
+								30,
+								16,
+								34,
+								37,
+								0,
+								0,
+								0,
+								113,
+								1,
+								133,
+								113,
+								2,
+								82,
+								113,
+								3,
+								46
+							],
+							"git_savvy.file_path": "/home/caleb/Development/StewieOS/kernel/src/kmem.c",
+							"git_savvy.repo_path": "/home/caleb/Development/StewieOS",
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 133.0
+	},
+	"input":
+	{
+		"height": 33.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 158.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "Makefile",
+	"project": "StewieOS.sublime-project",
+	"replace":
+	{
+		"height": 64.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": true,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 160.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
