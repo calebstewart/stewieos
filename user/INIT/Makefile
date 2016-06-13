@@ -1,7 +1,7 @@
 SOURCES:=src/main.c
 OBJECTS:=$(SOURCES:.c=.o)
 CFLAGS:=-g -static
-LDFLAGS:=
+LDFLAGS:= -lc
 PROJECT_NAME:=init
 
 .PHONY: all install clean

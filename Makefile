@@ -41,7 +41,7 @@ export STEWIEOS_IMAGE:=$(abspath ./stewieos.dd)
 export STEWIEOS_BIN:=/mnt/bin
 export STEWIEOS_OPT:=/mnt/opt
 export STEWIEOS_ROOT:=/mnt
-export CC:=$(TOOLCHAIN_LOCATION)/bin/i586-pc-stewieos-gcc
+export CC:=i386-elf-stewieos-gcc
 export LD:=$(CC)
 export ASM:=nasm
 
@@ -67,6 +67,7 @@ stewieos.dd:
 prepare_vhd:
 	losetup /dev/loop0 $(STEWIEOS_IMAGE)
 	kpartx -v -a /dev/loop0
+	sleep .1
 	mount /dev/mapper/loop0p1 /mnt
 	
 cleanup_vhd:

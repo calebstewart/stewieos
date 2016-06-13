@@ -14,6 +14,13 @@ case $1 in
 		# kill -s SIGTERM `cat ./ttymon.pid`
 		# rm ./ttymon.pid
 		;;
+	status)
+		# Query service status
+		if[ -e "ttymon.pid" ]; then
+			echo "$0 started on PID" `cat ttymon.pid`"."
+		else
+			echo "$0 not started."
+		fi
 	*)
 		echo "$0: unrecognized action: $1"
 		;;

@@ -1,15 +1,27 @@
 {
+	// This will be used as the name of the
+	// script or binary to execute
 	"name": "ttymon",
+	// Actions which this service accepts
+	// These will be sent to the service via
+	// the script named above.
 	"implements": [
+		// Start/Stop actions
+		{ "name": "start" },
+		{ "name": "stop" },
+		// A "phony" action which is never
+		// sent to the service, but its pre
+		// and post actions are executed.
 		{
-			"name": "start",
-		},
-		{
-			"name": "stop",
-		},
-		{
+			// Restart the service
 			"name": "restart",
+			// Don't actually send "restart"
+			"phony": true,
+			// Execute stop, then start.
+			// Same as restart!
 			"pre": ["stop", "start"]
-		}
+		},
+		// Check the service status
+		{ "name": "status" }
 	]
 }
