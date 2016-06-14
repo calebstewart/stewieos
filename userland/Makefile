@@ -1,17 +1,14 @@
-# This is where you can add modules to the build list
-# just add the directory name underwhich they reside
-# and make sure there is makefile within that has
-# all, clean and install targets.
-PROJECTS:=vtty atkbd
+# This is where you can add project directories to the build-chain
+PROJECTS:=template
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install
+.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean install
 
 export DESTDIR
 export CC=$(TARGET)-gcc
-export LD=$(TARGET)-ld
+export LD=$(CC)
 
 all: $(ALLPROJECTS)
 

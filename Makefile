@@ -1,105 +1,59 @@
-#====================================================================
-#
-# Author: Caleb Stewart
-# Date: 10 September 2013
-# Prupose: A top-level make file to build the OS, toolchain, initrd,
-# :		etc...
-#
-# ===================================================================
-# = Change Log                                                      |
-# ===================================================================
-# =    Date    |    Programmer   |    Description                   |
-# ===================================================================
-# = 10SEP2013  | Caleb Stewart   | Initial Creation                 |
-# =            |                 |                                  |
-# ===================================================================
-# = 15SEP2013  | Caleb Stewart   | Edited so you have to compile    |
-# =            |                 | each project seperately          |
-# ===================================================================
-#
-#====================================================================
+# @author: caleb
+# @date: 13 Jun 2016
+# Root Makefile used to build all
+# components of StewieOS 
 
+.PHONY: toolchain kernel userland all-confirm all
+.PHONY: binutils gcc newlib libstdc++ modules
 
-# This is where you can add project directories to the source
-# kernel should come first here!
-PROJECTS:=kernel modules user
-ALLPROJECTS:=$(PROJECTS:%=all-%)
-CLEANPROJECTS:=$(PROJECTS:%=clean-%)
-INSTALLPROJECTS:=$(PROJECTS:%=install-%)
-DEVICE=/dev/null
+BUILDDIR:=$(abspath ./toolchain/build)
+TOOLCHAIN:=$(abspath ./toolchain)
+DESTDIR ?= $(abspath ./sysroot)
 
-.PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install_vhd prepare_vhd cleanup_vhd fix_vhd perpare_device cleanup_device install_device
-.PHONY: mount umount install_files create_vhd fsck do_fsck
+all:
+	@echo "Building all components can take considerable time."
+	@echo "If you are sure that's what you want, run 'make all-confirm'"
 
-# Exported variables for project makefiles
-export TOOLCHAIN_LOCATION:=$(HOME)/opt/stewieos-cross
-export KERNEL_DIR:=$(abspath ./kernel)
-export MODULES_DIR:=$(abspath ./modules)
-export STEWIEOS_DIR:=$(abspath ./)
-export STEWIEOS_CURRENT:=$(abspath ./stewieos-current)
-export STEWIEOS_IMAGE:=$(abspath ./stewieos.dd)
-export STEWIEOS_BIN:=/mnt/bin
-export STEWIEOS_OPT:=/mnt/opt
-export STEWIEOS_ROOT:=/mnt
-export CC:=i386-elf-stewieos-gcc
-export LD:=$(CC)
-export ASM:=nasm
+all-confirm: toolchain kernel userland
 
-all: $(ALLPROJECTS)
+toolchain: binutils gcc newlib libstdc++
 
-clean: $(CLEANPROJECTS)
+$(BUILDDIR)/binutils/Makefile:
+	cd "$(BUILDDIR)/binutils"; \
+	 $(TOOLCHAIN)/binutils/configure --prefix="$(PREFIX)" --target="$(TARGET)" --with-sysroot="$(SYSROOT)" --disable-werror
 
-install_vhd: stewieos.dd prepare_vhd install_files $(INSTALLPROJECTS) cleanup_vhd
+binutils: $(BUILDDIR)/binutils/Makefile
+	$(MAKE) -C "$(BUILDDIR)/binutils" -j 4
+	$(MAKE) -C "$(BUILDDIR)/binutils" -j 4 install
 
-mount: prepare_vhd
+$(BUILDDIR)/gcc/Makefile:
+	cd  "$(BUILDDIR)/gcc"; \
+	 $(TOOLCHAIN)/gcc/configure --prefix="$(PREFIX)" --target="$(TARGET)" --with-sysroot="$(SYSROOT)" --enable-languages=c,c++
 
-umount: cleanup_vhd
+gcc:
+	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-gcc all-target-libgcc
+	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-gcc install-target-libgcc
 
-fsck: prepare_vhd do_fsck fix_vhd
+$(BUILDDIR)/newlib/Makefile:
+	cd "$(BUILDDIR)/newlib"; \
+	 $(TOOLCHAIN)/newlib/configure --prefix="$(PREFIX)" --target="$(TARGET)"
 
-do_fsck:
-	umount /mnt
-	-e2fsck -f /dev/mapper/loop0p1
+newlib:
+	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4
+	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4 DESTDIR="$(SYSROOT)" install
 
-stewieos.dd: 
-	./stewieos_make_hdd.sh
+libstdc++:
+	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-target-libstdc++-v3
+	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-target-libstdc++-v3
 
-prepare_vhd:
-	losetup /dev/loop0 $(STEWIEOS_IMAGE)
-	kpartx -v -a /dev/loop0
-	sleep .1
-	mount /dev/mapper/loop0p1 /mnt
-	
-cleanup_vhd:
-	umount /mnt
-	kpartx -v -d /dev/loop0
-	losetup -d /dev/loop0
-	
-install_device: prepare_device install_files $(INSTALLPROJECTS) cleanup_device
-	
-prepare_device:
-	mount $(DEVICE) /mnt
+userland:
+	$(MAKE) -C "userland" all
+	$(MAKE) -C "userland" DESTDIR=$(DESTDIR) install
 
-cleanup_device:
-	umount /mnt
+modules:
+	$(MAKE) -C "modules" all
+	$(MAKE) -C "modules" DESTDIR=$(DESTDIR) install
 
-#Sometimes cleanup_vhd fails, so we need this to make the fix a little easier
-#I don't know why it fails, but in the mean time this works.
-fix_vhd:
-	kpartx -v -d /dev/loop0
-	losetup -d /dev/loop0
-
-install_files:
-	cp -R -u ./fs_root/* /mnt/
-
-$(ALLPROJECTS):
-	$(MAKE) -C $(@:all-%=%) all
-
-$(CLEANPROJECTS):
-	$(MAKE) -C $(@:clean-%=%) clean
-	
-$(INSTALLPROJECTS):
-	$(MAKE) -C $(@:install-%=%) install
-
-# Here, you can add dependencies for specific projects
-# vhd: kernel
+kernel:
+	$(MAKE) -C "kernel" all
+	$(MAKE) -C "kernel" DESTDIR=$(DESTDIR) install

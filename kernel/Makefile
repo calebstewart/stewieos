@@ -15,6 +15,9 @@ KERNEL_VERSION:=0.0.1
 KERNEL_ID:=stewieos
 KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)
 
+export CC=$(TARGET)-gcc
+export LD=$(TARGET)-ld
+
 .PHONY: all install clean libs-all libs-clean
 
 all: libs-all $(KERNEL_NAME)
@@ -22,7 +25,7 @@ all: libs-all $(KERNEL_NAME)
 	ln -s $(shell readlink -f $(KERNEL_NAME)) ../stewieos-current
 
 install:
-	cp ./$(KERNEL_NAME) /mnt/boot/
+	cp ./$(KERNEL_NAME) "$(DESTDIR)/boot"
 
 clean: libs-clean
 	rm -f $(OBJFILES)
