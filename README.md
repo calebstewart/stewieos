@@ -31,7 +31,7 @@ For building and running StewieOS, there will be a few things you need to instal
 
 The most important thing there is `automake` and `autoconf`. When working with `gcc`, `binutils` and `newlib`, you must be very specific about the versioning of these tools. They do not have to be the only version installed. My development machine is Arch Linux, and both of these tools are available with those versions (either through AUR or community), but are installed in different locations than the standard autotools. See the "Daily Usage" section for a solution.
 
-For instructions on building the StewieOS custom toolchain, see the [build](./build) directory. Make sure you source the `init.sh` script before beginning the toolchain installation.
+For instructions on building the StewieOS custom toolchain, see the [toolchain build](./toolchain/build) directory. Make sure you source the `init.sh` script before beginning the toolchain installation.
 
 Environment - Daily Usage
 -------------------------
