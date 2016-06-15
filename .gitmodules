@@ -1,9 +1,9 @@
 [submodule "binutils"]
-	path = binutils
+	path = toolchain/binutils
 	url = https://github.com/Caleb1994/stewieos-binutils
 [submodule "newlib"]
-	path = newlib
+	path = toolchain/newlib
 	url = https://github.com/Caleb1994/stewieos-newlib
 [submodule "gcc"]
-	path = gcc
+	path = toolchain/gcc
 	url = https://github.com/Caleb1994/stewieos-gcc
