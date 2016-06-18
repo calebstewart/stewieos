@@ -17,12 +17,13 @@ KERNEL_NAME:=$(KERNEL_ID)-kernel-$(KERNEL_VERSION)
 
 export CC=$(TARGET)-gcc
 export LD=$(TARGET)-ld
+#export ASM=$(TARGET)-as
+export ASM=nasm
+export KERNEL_DIR=$(abspath .)
 
 .PHONY: all install clean libs-all libs-clean
 
 all: libs-all $(KERNEL_NAME)
-	rm -f ../stewieos-current
-	ln -s $(shell readlink -f $(KERNEL_NAME)) ../stewieos-current
 
 install:
 	cp ./$(KERNEL_NAME) "$(DESTDIR)/boot"

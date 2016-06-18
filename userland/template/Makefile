@@ -17,4 +17,4 @@ clean:
 	rm -f bin/$(PROJECT_NAME)
 
 install:
-	strip -o "$(BUILDDIR)/bin/$(PROJECT_NAME)" -s bin/$(PROJECT_NAME)
+	strip -o "$(DESTDIR)/bin/$(PROJECT_NAME)" -s bin/$(PROJECT_NAME)

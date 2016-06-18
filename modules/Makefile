@@ -12,6 +12,7 @@ INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 export DESTDIR
 export CC=$(TARGET)-gcc
 export LD=$(TARGET)-ld
+export KERNEL_DIR=$(abspath ../kernel)
 
 all: $(ALLPROJECTS)
 

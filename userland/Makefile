@@ -1,5 +1,5 @@
 # This is where you can add project directories to the build-chain
-PROJECTS:=template
+PROJECTS:=arguments cat echo INIT ls mesg mkdir sh shutdown syslogd touch write_test
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)
@@ -23,4 +23,5 @@ $(CLEANPROJECTS):
 	$(MAKE) -C $(@:clean-%=%) clean
 	
 $(INSTALLPROJECTS):
+	mkdir -p $(DESTDIR)/bin
 	$(MAKE) -C $(@:install-%=%) install
