@@ -5,7 +5,7 @@
 
 .PHONY: toolchain kernel userland all-confirm all
 .PHONY: binutils gcc newlib libstdc++ modules libgcc
-.PHONY: stewieos
+.PHONY: stewieos clean-all
 
 BUILDDIR:=$(abspath ./toolchain/build)
 TOOLCHAIN:=$(abspath ./toolchain)
@@ -52,6 +52,11 @@ newlib: gcc $(BUILDDIR)/newlib/Makefile
 libstdc++: newlib
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-target-libstdc++-v3
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-target-libstdc++-v3
+
+clean-all:
+	$(MAKE) -C "userland" clean
+	$(MAKE) -C "modules" clean
+	$(MAKE) -C "kernel" clean
 
 userland:
 	$(MAKE) -C "userland" all

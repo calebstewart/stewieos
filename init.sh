@@ -10,3 +10,4 @@ export SYSROOT="$PREFIX"
 export TARGET=i386-elf-stewieos
 export PATH=`pwd`/toolchain/root/bin:$PATH
 export PATH=/opt/autoconf/2.64/bin:$PATH
+export PATH=`pwd`/tools:$PATH

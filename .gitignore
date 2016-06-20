@@ -1,8 +1,8 @@
 **/*.o
-stewieos-current
 **/bin/
+**/stewieos-kernel-*.*.*
+stewieos.vmdk
+stewieos.img
+stewieos.qcow2
 stewieos.dd
-stewieos-kernel-*.*.*
-external
 core
-
