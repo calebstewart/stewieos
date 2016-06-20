@@ -2,7 +2,7 @@
 # @Author: Caleb Stewart
 # @Date:   2016-06-19 19:33:18
 # @Last Modified by:   Caleb Stewart
-# @Last Modified time: 2016-06-19 23:27:34
+# @Last Modified time: 2016-06-20 00:00:18
 IMAGE_TYPE=vmdk
 IMAGE_NAME="stewieos".$IMAGE_TYPE
 DEVICE_NAME=/dev/nbd0
@@ -10,6 +10,21 @@ PART_NAME=/dev/mapper/nbd0p1
 IMAGE_MOUNT=`mktemp -d`
 IMAGE_SIZE="1G"
 SELF=`basename $0`
+RED=`tput setaf 1`
+GREEN=`tput setaf 2`
+RST=`echo -e "\e[0m"`
+UL=`echo -e "\e[4m"`
+BLD=`echo -e "\e[1m"`
+
+function info
+{
+	echo "[${GREEN}info${RST}] $@"
+}
+
+function error
+{
+	echo "[${RED}error${RST}] $@" >&2
+}
 
 # Create the disk image
 function create_image
@@ -82,11 +97,16 @@ function umount_image
 # Create and setup the virtual image
 function image_create
 {
+	info "creating image..."
 	create_image
 	load_image
+	info "formatting image..."
 	format_image
+	info "mounting image..."
 	mount_image
+	info "synchronizing system root..."
 	sync_image
+	info "cleaning up..."
 	umount_image
 	unload_image
 }
@@ -94,9 +114,12 @@ function image_create
 # Synchronize the image with the sysroot directory
 function image_sync
 {
+	info "mounting image..."
 	load_image
 	mount_image
+	info "synchronizing system root..."
 	sync_image
+	info "cleaning up..."
 	umount_image
 	unload_image
 }
@@ -104,6 +127,8 @@ function image_sync
 # Spin up the emulator based on the image
 function image_emulate
 {
+	info "starting qemu emulator..."
+	info "connecting virtual serial port to terminal..."
 	qemu-system-i386 -drive file="$IMAGE_NAME",format="$IMAGE_TYPE" -serial stdio -boot c -s
 }
 
@@ -118,16 +143,21 @@ function image_cleanup
 
 function print_help
 {
-	echo -e "USAGE: $SELF -s|--size imagesize -t|--type imagetype [run|create|sync]..."
-	echo -e "OPTIONS:"
-	echo -e "\t-s|--size"
-	echo -e "\t\tThe size of the image (when creating)"
-	echo -e "\t-t|--type"
-	echo -e "\t\tThe type of the image (when creating)"
-	echo -e "ACTIONS:"
-	echo -e "\trun: execute an emulator to run the virtual image"
-	echo -e "\tcreate: create the virtual image (requires root privileges)"
-	echo -e "\tsync: synchronize the current image with the sysroot directory"
+	cat <<END
+${BLD}USAGE${RST}: $SELF -s|--size ${UL}imagesize${RST} -t|--type ${UL}imagetype${RST} [run|create|sync]...
+${BLD}OPTIONS${RST}:
+	${UL}-s|--size${RST}:
+		The size of the image (when creating)
+	${UL}-t|--type${RST}:
+		The type of the image (when creating)
+${BLD}ACTIONS${RST}:
+	${UL}run${RST}:
+		execute an emulator to run the virtual image
+	${UL}create${RST}:
+		create the virtual image (requires root privileges)
+	${UL}sync${RST}:
+		synchronize the current image with the sysroot directory
+END
 }
 
 # Make sure that we cleanup before exit
@@ -163,7 +193,7 @@ while true ; do
 			shift ; break
 			;;
 		*)
-			echo "internal error." >&2 ;
+			error "unknown error."
 			exit 1
 			;;
 	esac
@@ -171,7 +201,7 @@ done
 
 # There should be an action specified
 if [ "$#" == "0" ]; then
-	echo "ERROR: no action specified!" >&2
+	error "no action specified!"
 	print_help
 	exit 1
 fi
@@ -188,7 +218,7 @@ for arg; do
 			image_sync
 			;;
 		*)
-			echo "unrecognized action: $arg" >&2
+			error "unrecognized action: $arg"
 			exit 1
 			;;
 	esac
