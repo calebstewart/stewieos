@@ -2,7 +2,7 @@
 # @Author: Caleb Stewart
 # @Date:   2016-06-19 19:33:18
 # @Last Modified by:   Caleb Stewart
-# @Last Modified time: 2016-06-20 00:00:18
+# @Last Modified time: 2016-06-20 00:44:06
 IMAGE_TYPE=vmdk
 IMAGE_NAME="stewieos".$IMAGE_TYPE
 DEVICE_NAME=/dev/nbd0
@@ -145,6 +145,12 @@ function print_help
 {
 	cat <<END
 ${BLD}USAGE${RST}: $SELF -s|--size ${UL}imagesize${RST} -t|--type ${UL}imagetype${RST} [run|create|sync]...
+
+	This command is used to manage the StewieOS virtual disk. You can create,
+	update and emulate a virtual machine disk image using this script. Multiple
+	actions may be run in one call, and one action can be run multiple times,
+	although I do not know why you would want to.
+
 ${BLD}OPTIONS${RST}:
 	${UL}-s|--size${RST}:
 		The size of the image (when creating)

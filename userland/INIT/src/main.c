@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 		printf("INIT: error: unable to execute syslogd. error code %d.\n", errno);
 		exit(-1);
 	}
-	
+
 	// Execute the shell
 	printf("INIT: executing default shell (%s)...\n", arguments[0]);
 	

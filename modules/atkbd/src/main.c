@@ -25,7 +25,7 @@ int keyboard_load(module_t* module ATTR((unused)))
 	if( PS2_IS_KBD(port_id) ){
 		kbd_port = PS2_PORT1;
 	} else {
-		syslog(KERN_ERR, "atkbd: first port id: %x\n", port_id);
+		//syslog(KERN_ERR, "atkbd: first port id: %x\n", port_id);
 		port_id = ps2_identify(PS2_PORT2);
 		if( !PS2_IS_KBD(port_id) ){
 			syslog(KERN_ERR, "atkbd: no ps/2 keyboard devices detected! %x", port_id);
@@ -54,7 +54,7 @@ int keyboard_load(module_t* module ATTR((unused)))
 		return -EIO;
 	}
 		
-	syslog(KERN_ERR, "atkbd: found ps/2 keyboard. listening on port %d.", kbd_port);
+	syslog(KERN_NOTIFY, "atkbd: found ps/2 keyboard. listening on port %d.", kbd_port);
 	
 	return 0;
 }
