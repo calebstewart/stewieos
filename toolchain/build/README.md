@@ -7,4 +7,4 @@ StewieOS comes with a toolchain complete with custom ports of `gcc`, `binutils`,
 $ make toolchain
 ```
 
-Phew, that was rough :D. In reality, this command will take some time, as it builds all of `binutils`, `gcc`, and `newlib` and installs them to `toolchain/root`. Grab a :beer:.
+Phew, that was rough :laughing:. In reality, this command will take some time, as it builds all of `binutils`, `gcc`, and `newlib` and installs them to `toolchain/root`. Grab a :beer:.
