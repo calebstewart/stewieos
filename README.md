@@ -8,6 +8,18 @@ Structure of the Project
 
 This repository not only contains my own work on the kernel, kernel modules, and userspace tools but also the complete toolchain source. In order to keep the toolchain logically seperated (it's quite large), it is connected via git submodules. The submodules are all located within the `toolchain` directory and are forks of their respective toolchain pieces (`binutils`, `gcc`, and `newlib`) with the needed modifications to create a cross compiler/toolchain for StewieOS.
 
+In order to fully download the repository, you should clone using the recursive option:
+
+```
+$ git clone --recursive https://github.com/Caleb1994/stewieos
+```
+
+If you have already cloned the repository, you can retrieve the submodules with,
+
+```
+$ git submodule update --init --recursive
+```
+
 Environment - Setup
 -------------------
 
