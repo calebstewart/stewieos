@@ -98,7 +98,7 @@ void task_init( void )
 	switch_page_dir(init->t_dir);
 	
 	init_task_vfs(&init->t_vfs);
-	
+	signal_init(init);
 	
 	// allocate the kernel stack
 	for(u32 stack_base = TASK_KSTACK_ADDR; stack_base < TASK_KSTACK_ADDR+TASK_KSTACK_SIZE; stack_base += 0x1000)
@@ -150,9 +150,8 @@ void task_init( void )
  * return value: 
  * 	none.
  */
-void task_preempt(struct regs* regs)
+void task_preempt(struct regs* regs ATTR((unused)))
 {
-	UNUSED(regs);
 	u32 esp;					// the old stack pointer
 	u32 ebp;					// the old base pointer
 	u32 eip;					// the old instruction pointer
@@ -219,12 +218,35 @@ void task_preempt(struct regs* regs)
 		{
 			struct task* dead = current;
 			current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
-			task_kill(dead);
+			task_free(dead);
 			continue;
 		}
 		
 	}
-	
+
+	// Check if we need to raise a signal
+	// and raise it if there is one!
+	signal_check(current);
+
+	// Make the jump back to the task
+	task_switch(current);
+}
+
+// This shouldn't really be used, except by task_preempt and signal_return...
+//  This function will, without question, restore the last saved state
+//  of the given task. In most cases, this is a bad idea, since it doesn't save
+//  the current tasks state before doing so.
+//
+// task_preempt will save the current tasks state first, and signal_return calls
+//  this function with the parameter of "current" after self modifying the saved
+//  state. Those are the only two known uses for this function.
+void task_switch(struct task* task)
+{
+	u32 esp;					// the old stack pointer
+	u32 ebp;					// the old base pointer
+	u32 eip;					// the old instruction pointer
+
+	current = task;
 	eip = current->t_eip;
 	esp = current->t_esp;
 	ebp = current->t_ebp;
@@ -257,7 +279,7 @@ void task_preempt(struct regs* regs)
 				: : "b"(eip),"c"(esp),"d"(ebp),"S"(curdir->phys), "D"(current->t_eflags));
 }
 
-/* function: task_kill
+/* function: task_free
  * purpose:
  * 	destroy all data from the task. The task structure may be
  * 	kept in memory until its parent is killed or it is wait'd on
@@ -267,7 +289,7 @@ void task_preempt(struct regs* regs)
  * return value:
  * 	none.
  */
-void task_kill(struct task* dead)
+void task_free(struct task* dead)
 {
 	
 	if( dead == current )
@@ -291,8 +313,6 @@ void task_kill(struct task* dead)
 // 		list_rem(dead->t_queue); // remove from ready queue
 // 		return;
 // 	}
-	
-	debug_message("killing task with id=%d", dead->t_pid);
 	
 	free_task_vfs(&dead->t_vfs);
 	
@@ -490,6 +510,8 @@ pid_t task_spawn(int kern)
 		task->t_dir = copy_page_dir(current->t_dir);
 		strip_page_dir(task->t_dir);
 	}
+
+	signal_init(task);
 	
 	if( !task->t_dir ){
 		kfree(task);
@@ -583,6 +605,7 @@ int sys_fork( void )
 	spin_init(&task->t_mesgq.lock);
 	
 	copy_task_vfs(&task->t_vfs, &current->t_vfs);
+	signal_init(task);
 
 	// copy the page directory
 	task->t_dir = copy_page_dir(current->t_dir);
@@ -675,6 +698,7 @@ pid_t worker_spawn(void(*thread)(void*), void* context)
 	task->t_dataend = 0;
 	task->t_dir = copy_page_dir(kerndir);
 	init_task_vfs(&task->t_vfs);
+	signal_init(task);
 	
 	// Setup the stack
 	*(void**)(task->t_esp) = context;
@@ -729,6 +753,8 @@ pid_t worker_spawn(void(*thread)(void*), void* context)
  */
 void sys_exit( int result )
 {
+	task_kill(current, result);
+
 	if( current->t_pid == 0 )
 	{
 		debug_message("warning: attempted to kill init task!", 0);
@@ -752,6 +778,22 @@ void sys_exit( int result )
 	
 	while(1);
 	
+}
+
+void task_kill(struct task* task, int status)
+{
+	u32 eflags = disablei();
+
+	task->t_status = status;
+	task->t_flags = TF_EXIT;
+
+	restore(eflags);
+
+	if( task == current ){
+		task->t_ticks_left = 0;
+		schedule();
+		while( 1 );
+	}
 }
 
 /* function: sys_waitpid
@@ -843,7 +885,7 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 		
 		asm volatile ("movl %%cr3,%0;" : "=r"(cr3));
 
-		// the task_kill function for the other task will store
+		// the task_free function for the other task will store
 		// its' pid and status information in our task structure
 		pid = current->t_waitfor;
 		*status = current->t_status;

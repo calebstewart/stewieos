@@ -47,7 +47,7 @@ $(BUILDDIR)/newlib/Makefile:
 newlib: gcc $(BUILDDIR)/newlib/Makefile
 	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4
 	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4 install
-	cp -ar $(SYSROOT)/$(TARGET)/* $(SYSROOT)/usr/
+#	cp -ar $(SYSROOT)/$(TARGET)/* $(SYSROOT)/usr/
 
 libstdc++: newlib
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-target-libstdc++-v3

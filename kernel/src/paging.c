@@ -111,11 +111,11 @@ void init_paging( multiboot_info_t* mb )
 		i+=0x1000;
 	}
 	
-	// allocate the actual initial pages for the kernel heap
-	for( u32 a = 0xD0000000; a < 0xD0010000; a += 0x1000 ){
-		page_t* page = get_page((void*)a, 0, kerndir);
-		alloc_frame(page, 0, 1);
-	}
+	// // allocate the actual initial pages for the kernel heap
+	// for( u32 a = 0xD0000000; a < 0xD0010000; a += 0x1000 ){
+	// 	page_t* page = get_page((void*)a, 0, kerndir);
+	// 	alloc_frame(page, 0, 1);
+	// }
 	
 	register_interrupt(0xE, page_fault);
 	
@@ -139,8 +139,10 @@ void init_paging( multiboot_info_t* mb )
 // 		page->present = 0;
 // 		page->frame = 0;
 	}
+
+	heap_init(&kernel_heap, (void*)0xD0000000, (void*)0xF0000000);
 	
-	init_kheap(0xD0000000, 0xD0010000, 0xF0000000);
+	//init_kheap(0xD0000000, 0xD0010000, 0xF0000000);
 }
 
 /* function: alloc_page
@@ -467,9 +469,9 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 		syslog(KERN_PANIC, "error: page directory not page aligned!\n");
 		while(1);
 	}
-	memset((char*)dst + 0x1000, 0, 0x1004);
-	memset(dst, 0, 0x1000);
-	//memset(dst, 0, sizeof(page_dir_t));
+	// memset((char*)dst + 0x1000, 0, 0x1004);
+	// memset(dst, 0, 0x1000);
+	memset(dst, 0, sizeof(page_dir_t));
 	dst->phys = tmp;
 	
 	for(int t = 0; t < 1024; ++t)

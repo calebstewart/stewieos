@@ -14,6 +14,7 @@ int ext2fs_remove(module_t* module);
 struct inode_operations e2_inode_operations = {
 	.mknod = e2_inode_mknod, .lookup = e2_inode_lookup,
 	.truncate = e2_inode_truncate, .flush = e2_inode_flush,
+	.unlink = e2_inode_unlink,
 };
 struct file_operations e2_default_file_operations = {
 	.open = e2_file_open, .close = e2_file_close, 

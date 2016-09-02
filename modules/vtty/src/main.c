@@ -44,20 +44,23 @@ MODULE_INFO("vtty", vtty_load, vtty_remove);
 
 int vtty_load(module_t* module __attribute__((unused)))
 {
+	// Allocate the tty driver structure
 	tty_driver_t* driver = tty_alloc_driver("vtty", VTTY_MAJOR, VTTY_NMINORS, &vtty_ops);
-	
 	if( IS_ERR(driver) ){
 		return PTR_ERR(driver);
 	}
 	
+	// Setup the termios
 	driver->device[0].termios.c_lflag |= ECHO;
 	
+	// Initialize the monitor
 	int error = monitor_init(module);
 	if( error != 0 ){
 		tty_free_driver(VTTY_MAJOR);
 		return error;
 	}
 	
+	// Initialize the keyboard
 	error = keyboard_init(module, &driver->device[0]);
 	if( error != 0 ){
 		monitor_quit(module);
@@ -65,6 +68,11 @@ int vtty_load(module_t* module __attribute__((unused)))
 		return error;
 	}
 	
+	// Create the device node
+	error = sys_mknod("/dev/tty0", S_IFCHR, makedev(VTTY_MAJOR, 0));
+	if( error != 0 && error != (-EEXIST) ){
+		syslog(KERN_WARN, "unable to create vtty device node. error code %d", error);
+	}
 	
 	return 0;
 }

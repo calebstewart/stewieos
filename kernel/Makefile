@@ -8,7 +8,7 @@ WARNINGS:= -Werror -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
             -Wuninitialized -Wconversion -Wstrict-prototypes -Wno-sign-conversion -Wno-unused-parameter -Wno-conversion
-CFLAGS:=-nostartfiles -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -I include -D_STEWIEOS -D__KERNEL__
+CFLAGS:=-nostartfiles -std=gnu99 -gdwarf-2 -g3 $(WARNINGS) -DKERNEL_DEBUGGING=1 -idirafter include -D_STEWIEOS -D__KERNEL__
 LDFLAGS:=-Tstewieos.ld -lgcc -nostartfiles
 
 KERNEL_VERSION:=0.0.1

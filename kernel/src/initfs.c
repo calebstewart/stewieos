@@ -10,7 +10,7 @@
 // inode operations
 int initfs_inode_lookup(struct inode* inode, struct dentry* dentry);
 int initfs_inode_mknod(struct inode* inode, const char* name, mode_t mode, dev_t device);
-int initfs_inode_node_unlink(struct inode* inode);
+int initfs_inode_node_unlink(struct inode* parent, struct dentry* name);
 // file operations
 int initfs_file_open(struct file* file, struct dentry* dentry, int flags);
 int initfs_file_close(struct file* file, struct dentry* dentry);
@@ -218,13 +218,20 @@ int initfs_inode_lookup(struct inode* inode, struct dentry* dentry)
 	return -ENOENT;
 }
 
-int initfs_inode_node_unlink(struct inode* inode)
+int initfs_inode_node_unlink(struct inode* inode, struct dentry* entry)
 {
 	struct initfs_private* priv = (struct initfs_private*)inode->i_super->s_private;
 	int i = inode->i_ino - priv->nfiles - 1;
-	struct initfs_node* node = priv->node[i];
+	struct initfs_node* node; // = priv->node[i];
+
+	// The specified file is part of the initfs
+	if( i < 0 ){
+		return -EROFS;
+	}
+
+	// The file is a special device file
+	node = priv->node[i];
 	priv->node[i] = NULL;
-	
 	kfree(node);
 	
 	return 0;

@@ -65,7 +65,7 @@ struct inode_operations
 	int(*mkdir)(struct inode*, const char*, mode_t);
 	int(*link)(struct inode*, const char*, struct inode*);
 	// Deleting self
-	int(*unlink)(struct inode*);
+	int(*unlink)(struct inode*, struct dentry*);
 	
 	int(*chmod)(struct inode*, mode_t);
 	int(*chown)(struct inode*, uid_t, gid_t);
@@ -388,7 +388,8 @@ int sys_isatty(int fd);
 int sys_chdir(const char* path);
 int sys_getcwd(char* buf, size_t count);
 int sys_pipe(int* pipefd);
-//int sys_dup(int newfd, int oldfd, int flags);
+int sys_dup2(int newfd, int oldfd);
+int sys_unlink(const char* pathname);
 
 int sys_resfd( void );
 void sys_relfd( int fd );

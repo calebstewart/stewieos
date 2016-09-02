@@ -9,28 +9,33 @@
 #include "timer.h"
 #include "pmm.h"
 #include "spinlock.h"
+#include "ksignal.h"
 #include <sys/message.h>
 
 // A running task
-#define TF_RUNNING ((u32)0x00000001)
+#define TF_RUNNING ((u32)(1<<0))
 // A task requesting to be rescheduled (giving up its timeslice)
-#define TF_RESCHED ((u32)0x00000002)
+#define TF_RESCHED ((u32)(1<<1))
 // The task is waiting on another task
-#define TF_WAITTASK ((u32)0x00000004)
+#define TF_WAITTASK ((u32)(1<<2))
 // The task is waiting on a signal
-#define TF_WAITSIG ((u32)0x00000008)
+#define TF_WAITSIG ((u32)(1<<3))
 // The task is requesting to be killed
-#define TF_EXIT ((u32)0x00000010)
+#define TF_EXIT ((u32)(1<<4))
 // The has been killed, and is waiting to be waited for
-#define TF_ZOMBIE ((u32)0x00000020)
+#define TF_ZOMBIE ((u32)(1<<5))
 // The task has just performed an execve and needs the scheduler to "finish up"
-#define TF_EXECVE ((u32)0x00000040)
+#define TF_EXECVE ((u32)(1<<6))
 // The task is waiting on IO
-#define TF_WAITIO ((u32)0x00000080)
+#define TF_WAITIO ((u32)(1<<7))
 // The task is waiting on a message
-#define TF_WAITMESG ((u32)0x00000100)
+#define TF_WAITMESG ((u32)(1<<8))
+// Executing a signal handler
+#define TF_SIGNAL ((u32)(1<<9))
+// Task has been stopped
+#define TF_STOPPED ((u32)(1<<10))
 
-#define TF_WAITMASK (TF_WAITIO | TF_WAITSIG | TF_WAITTASK | TF_WAITMESG)
+#define TF_WAITMASK (TF_WAITIO | TF_WAITSIG | TF_WAITTASK | TF_WAITMESG | TF_STOPPED)
 
 #define T_ISZOMBIE(task) ((task)->t_flags & TF_ZOMBIE)
 #define T_RUNNING(task) ((task)->t_flags & TF_RUNNING)
@@ -42,7 +47,11 @@
 #define TASK_KSTACK_SIZE	0x2000
 #define TASK_MAGIC_EIP		0xDEADCABB
 
-#define TASK_STACK_START	KERNEL_VIRTUAL_BASE
+// Special stack devoted to signal handlers
+#define TASK_SIGNAL_STACK		(KERNEL_VIRTUAL_BASE)
+#define TASK_SIGNAL_STACK_SIZE	(0x1000)
+// User stack
+#define TASK_STACK_START		(KERNEL_VIRTUAL_BASE-TASK_SIGNAL_STACK_SIZE)
 #define TASK_STACK_INIT_SIZE	0x4000
 #define TASK_STACK_INIT_BASE	(KERNEL_VIRTUAL_BASE-TASK_STACK_INIT_SIZE)
 #define TASK_MAX_ARG_SIZE	(TASK_STACK_INIT_SIZE/2)
@@ -99,6 +108,7 @@ struct task
 	struct vfs			t_vfs;					// this tasks virtual file system information
 	struct regs			t_regs;					// Register Information for the task switch after an execve
 	message_queue_t		t_mesgq;				// message queue for ipc
+	signal_state_t		t_signal;				// Signal State for this process
 	
 	list_t				t_sibling;				// the link in the parents children list
 	list_t				t_children;				// list of child tasks (forked processes)
@@ -111,7 +121,9 @@ struct task
 
 void task_init( void );
 void task_preempt(struct regs* regs);
-void task_kill(struct task* task);
+void task_switch(struct task* task);
+void task_free(struct task* task);
+void task_kill(struct task* task, int status);
 // lookup a task based on process id
 struct task* task_lookup(pid_t pid);
 
@@ -135,6 +147,12 @@ pid_t sys_waitpid(pid_t pid, int* status, int options);
 
 int sys_message_send(pid_t pid, unsigned int type, const char* what, size_t length);
 int sys_message_pop(message_t* message, unsigned int id, unsigned int flags);
+// Raise a signal for yourself or another process
+int sys_kill(pid_t pid, int signum);
+// Set your signal handler
+int sys_signal(int signum, sighandler_t* handler);
+// Return from a signal
+int sys_sigret( void );
 
 pid_t task_spawn(int kern);
 pid_t worker_spawn(void(*worker)(void*), void* context);

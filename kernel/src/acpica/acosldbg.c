@@ -10,6 +10,7 @@ void ACPI_INTERNAL_VAR_XFACE AcpiOsPrintf(
 	const char* Fmt,
 	...)
 {
+#ifdef ACPI_PRINT_DEBUG
 	va_list va;
 	char buffer[512];
 	
@@ -18,16 +19,18 @@ void ACPI_INTERNAL_VAR_XFACE AcpiOsPrintf(
 	va_end(va);
 	
 	syslog_printf(buffer);
-	
+#endif	
 }
 
 void AcpiOsVprintf(
 	const char* Fmt,
 	va_list Args)
 {
+#ifdef ACPI_PRINT_DEBUG
 	char buffer[512];
 	ee_vsprintf(buffer, Fmt, Args);
 	syslog_printf(buffer);
+#endif
 }
 
 ACPI_STATUS AcpiOsGetLine(char* Buffer ATTR((unused)),

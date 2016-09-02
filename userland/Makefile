@@ -1,5 +1,5 @@
 # This is where you can add project directories to the build-chain
-PROJECTS:=arguments cat echo INIT ls mesg mkdir sh shutdown syslogd touch write_test
+PROJECTS:=arguments cat echo serviced ls mesg mkdir sh shutdown syslogd touch write_test rm sigtest
 ALLPROJECTS:=$(PROJECTS:%=all-%)
 CLEANPROJECTS:=$(PROJECTS:%=clean-%)
 INSTALLPROJECTS:=$(PROJECTS:%=install-%)

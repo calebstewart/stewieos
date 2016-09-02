@@ -217,10 +217,10 @@ ssize_t tty_file_read(struct file* file, char* buffer, size_t count)
 	// Lock the device so we don't get a partial stream
 	spin_lock(&device->lock);
 	
-	if( task_getfg() != sys_getpid() ){
-		spin_unlock(&device->lock);
-		return 0;
-	}
+	// if( task_getfg() != sys_getpid() ){
+	// 	spin_unlock(&device->lock);
+	// 	return 0;
+	// }
 	
 	if( device->termios.c_lflag & ICANON )
 	{

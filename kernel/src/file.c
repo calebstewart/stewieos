@@ -119,6 +119,7 @@ int file_flush(struct file* file)
 
 struct file* file_get(struct file* file)
 {
+	if( file == NULL ) return file;
 	file->f_refs++;
 	return file;
 }

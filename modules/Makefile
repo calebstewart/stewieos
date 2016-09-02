@@ -9,7 +9,6 @@ INSTALLPROJECTS:=$(PROJECTS:%=install-%)
 
 .PHONY: $(ALLPROJECTS) $(CLEANPROJECTS) $(INSTALLPROJECTS) all clean test install
 
-export DESTDIR
 export CC=$(TARGET)-gcc
 export LD=$(TARGET)-ld
 export KERNEL_DIR=$(abspath ../kernel)
@@ -27,4 +26,5 @@ $(CLEANPROJECTS):
 	$(MAKE) -C $(@:clean-%=%) clean
 	
 $(INSTALLPROJECTS):
-	$(MAKE) -C $(@:install-%=%) install
+	mkdir -p $(DESTDIR)/lib/modules
+	$(MAKE) -C $(@:install-%=%) DESTDIR=$(DESTDIR)/lib/modules install

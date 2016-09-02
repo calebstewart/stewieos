@@ -5,6 +5,11 @@
 #include "descriptor_tables.h"
 #include "multiboot.h"
 
+#define PAGE_SIZE (0x1000)
+#define PAGE_ALIGN(addr) ( (addr) & 0xFFFFF000 )
+#define PAGE_OFFSET(addr) ( (addr) & 0x00000FFF )
+#define PAGE_ALIGNED(addr) (PAGE_OFFSET(addr) == 0)
+
 #define VADDR(t, p, o)	(((0x3ff & t) << 22) | ((0x3ff & p) << 12) | (o & 0xfff))
 
 typedef struct page

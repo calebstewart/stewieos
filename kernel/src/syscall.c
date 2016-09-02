@@ -27,12 +27,19 @@ DECL_SYSCALL(syscall_waitpid);
 DECL_SYSCALL(syscall_readdir);
 DECL_SYSCALL(syscall_chdir);
 DECL_SYSCALL(syscall_getcwd);
-DECL_SYSCALL(syscall_mknod)
+DECL_SYSCALL(syscall_mknod);
 DECL_SYSCALL(syscall_shutdown);
 DECL_SYSCALL(syscall_detach);
 DECL_SYSCALL(syscall_access);
 DECL_SYSCALL(syscall_message_send);
 DECL_SYSCALL(syscall_message_pop);
+DECL_SYSCALL(syscall_dup2);
+DECL_SYSCALL(syscall_syslog);
+DECL_SYSCALL(syscall_unlink);
+DECL_SYSCALL(syscall_signal);
+DECL_SYSCALL(syscall_sigret);
+DECL_SYSCALL(syscall_setsigret);
+DECL_SYSCALL(syscall_kill);
 
 syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_EXIT] = syscall_exit,
@@ -60,7 +67,14 @@ syscall_handler_t syscall[SYSCALL_COUNT] = {
 	[SYSCALL_DETACH] = syscall_detach,
 	[SYSCALL_ACCESS] = syscall_access,
 	[SYSCALL_MESG_SEND] = syscall_message_send,
-	[SYSCALL_MESG_POP] = syscall_message_pop
+	[SYSCALL_MESG_POP] = syscall_message_pop,
+	[SYSCALL_DUP2] = syscall_dup2,
+	[SYSCALL_SYSLOG] = syscall_syslog,
+	[SYSCALL_UNLINK] = syscall_unlink,
+	[SYSCALL_SIGNAL] = syscall_signal,
+	[SYSCALL_SIGRET] = syscall_sigret,
+	[SYSCALL_SETSIGRET] = syscall_setsigret,
+	[SYSCALL_KILL] = syscall_kill
 };
 
 void syscall_handler(struct regs* regs)
@@ -204,4 +218,61 @@ void syscall_message_send(struct regs* regs)
 void syscall_message_pop(struct regs* regs)
 {
 	regs->eax = (u32)sys_message_pop((message_t*)regs->ebx, (unsigned int)regs->ecx, (unsigned int)regs->edx);
+}
+
+void syscall_dup2(struct regs* regs)
+{
+	regs->eax = (u32)sys_dup2((int)regs->ebx, (int)regs->ecx);
+}
+
+void syscall_unlink(struct regs* regs)
+{
+	regs->eax = (u32)sys_unlink((const char*)regs->ebx);
+}
+
+void syscall_syslog(struct regs* regs)
+{
+	int level = (int)regs->ebx;
+	char* message = (char*)regs->ecx;
+
+	syslog(level, message);
+
+	// Remove formatting
+	for(size_t i = 0; i < strlen(message); ++i){
+		if( message[i] == '%' ){
+			// If this is a formatting character, replace with space
+			if( i == (strlen(message)-1) || message[i+1] != '%' ) message[i] = ' ';
+			// If it is double '%', just leave it. snprintf will replace with one %.
+			else i++;
+		}
+	}
+
+	// Broadcast message
+	//syslog(level, message);
+}
+
+void syscall_signal(struct regs* regs)
+{
+	regs->eax = (u32)signal_signal(current, (int)regs->ebx, (sighandler_t)regs->ecx);
+}
+
+void syscall_sigret(struct regs* regs ATTR((unused)))
+{
+	signal_return(current);
+}
+
+void syscall_setsigret(struct regs* regs)
+{
+	signal_set_return(current, (void*)regs->ebx);
+}
+
+void syscall_kill(struct regs* regs)
+{
+	struct task* task = task_lookup((pid_t)regs->ebx);
+	if( task == NULL ){
+		regs->eax = (u32)-ESRCH;
+		return;
+	}
+
+	regs->eax = (u32)signal_kill(task, (int)regs->ecx);
 }

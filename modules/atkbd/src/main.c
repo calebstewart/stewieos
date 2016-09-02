@@ -22,16 +22,17 @@ int keyboard_load(module_t* module ATTR((unused)))
 {
 	u8 kbd_port = 0;
 	u16 port_id = ps2_identify(PS2_PORT1);
-	if( PS2_IS_KBD(port_id) ){
+	if( PS2_IS_KBD(port_id) || port_id == PS2_DEV_NONE ){
 		kbd_port = PS2_PORT1;
 	} else {
 		//syslog(KERN_ERR, "atkbd: first port id: %x\n", port_id);
 		port_id = ps2_identify(PS2_PORT2);
 		if( !PS2_IS_KBD(port_id) ){
-			syslog(KERN_ERR, "atkbd: no ps/2 keyboard devices detected! %x", port_id);
+			syslog(KERN_ERR, "atkbd: no ps/2 keyboard devices detected!", port_id);
 			return -ENODEV;
+		} else {
+			kbd_port = PS2_PORT2;
 		}
-		kbd_port = PS2_PORT2;
 	}
 	//ps2_disable(kbd_port); // disable the device
 	ps2_config(0, PS2_CFG_INT(kbd_port)); // disable interrupts for that device

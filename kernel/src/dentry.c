@@ -189,7 +189,8 @@ struct dentry* d_lookup(struct dentry* dir, const char* name)
 	if( IS_ERR(entry) ){
 		return entry;
 	}
-	
+
+
 	// attempt read the inode from the filesystem
 	error = dir->d_inode->i_ops->lookup(dir->d_inode, entry);
 	
@@ -198,6 +199,6 @@ struct dentry* d_lookup(struct dentry* dir, const char* name)
 		d_put(entry);
 		return ERR_PTR(error);
 	}
-	
+
 	return entry;
 }

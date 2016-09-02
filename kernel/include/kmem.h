@@ -2,6 +2,7 @@
 #define _KMEM_H_
 
 #include "kernel.h"
+#include "kheap.h"
 
 #define kernel_alloc(type) (type*)kmalloc(sizeof(type))
 

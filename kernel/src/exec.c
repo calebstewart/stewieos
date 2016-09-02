@@ -9,6 +9,7 @@
 #include "elf/elf32.h"
 #include "paging.h"
 #include "task.h"
+#include "ksignal.h"
 
 exec_type_t* g_exec_type = NULL;
 list_t g_module_list = LIST_INIT(g_module_list);
@@ -171,6 +172,13 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	
 	// Create an empty page directory and free the old one (there's no going back from here...)
 	strip_page_dir(curdir);
+	signal_init(current);
+
+	// Allocate the signal stack
+	for( u32 addr = TASK_SIGNAL_STACK-TASK_SIGNAL_STACK_SIZE;
+			addr < TASK_SIGNAL_STACK; addr += 0x1000 ){
+		alloc_page(curdir, (void*)addr, 1, 1);
+	}
 	
 	// Allocate the new tasks user stack space
 	for(u32 addr = TASK_STACK_INIT_BASE; addr < TASK_STACK_START; addr += 0x1000)
@@ -235,6 +243,9 @@ int sys_execve(const char* filename, char** argv, char** envp)
 	current->t_flags |= TF_EXECVE;
 	current->t_ticks_left = 0;
 	current->t_dataend = (u32)exec->bssend;
+
+	// Close the file and free the memory
+	close_exec(exec);
 	
 	// Interrupts may have been disabled, just enabled them just in case
 	// It shouldn't matter at this point anyway.

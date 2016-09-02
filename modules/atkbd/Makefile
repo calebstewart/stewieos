@@ -22,8 +22,8 @@ all: $(PROJECT_NAME)
 $(PROJECT_NAME): $(OUTPUT_FILE)
 
 install:
-	strip -S -o $(DESTDIR)/boot/$(PROJECT_NAME).o $(OUTPUT_FILE)
-	chmod +x $(DESTDIR)/boot/$(PROJECT_NAME).o
+	strip -S -o $(DESTDIR)/$(PROJECT_NAME).o $(OUTPUT_FILE)
+	chmod +x $(DESTDIR)/$(PROJECT_NAME).o
 
 clean:
 	rm -f $(OBJFILES) $(OUTPUT_FILE)

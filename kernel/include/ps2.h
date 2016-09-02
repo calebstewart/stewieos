@@ -36,8 +36,8 @@
 #define PS2_CFG_INT(p)		( (p) == PS2_PORT1 ? PS2_CFG_INT1 : ( (p) == PS2_PORT2 ? PS2_CFG_INT2 : 0 ) )
 
 // PS/2 Controller Output Port
-#define PS2_OUT_RST		(1<<0)	/* Always '1', pulse using PS2_CMD_RST */
-#define PS2_OUT_A20		(1<<1)	/* A20 Gate */
+#define PS2_OUT_RST			(1<<0)	/* Always '1', pulse using PS2_CMD_RST */
+#define PS2_OUT_A20			(1<<1)	/* A20 Gate */
 #define PS2_OUT_CLK2		(1<<2)	/* Second PS/2 Port Clock */
 #define PS2_OUT_DAT2		(1<<2)	/* Second PS/2 Port Data */
 #define PS2_OUT_FUL1		(1<<3)	/* Output Buffer Full From PS/2 Port 1 */
@@ -48,7 +48,7 @@
 // PS/2 Identify Results
 #define PS2_DEV_MOUSE		0x0000	/* Standard PS/2 Mouse */
 #define PS2_DEV_SCRLMOUSE	0x0300	/* Mouse with scroll wheel */
-#define PS2_DEV_5BTNMOUSE		0x0400	/* 5-button Mouse */
+#define PS2_DEV_5BTNMOUSE	0x0400	/* 5-button Mouse */
 #define PS2_DEV_TRKEYBOARD1	0xAB41	/* MF2 Keyboard With Controller Translation */
 #define PS2_DEV_TRKEYBOARD2	0xABC1	/* Same as above */
 #define PS2_DEV_KEYBOARD	0xAB83	/* MF2 Keyboard */

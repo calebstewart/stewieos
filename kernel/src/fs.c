@@ -208,7 +208,7 @@ void copy_task_vfs(struct vfs* d, struct vfs* s)
 	memset(d, 0, sizeof(struct vfs));
 	path_copy(&d->v_cwd, &s->v_cwd);
 	for(int i = 0; i < 1024; ++i){
-		if( s->v_openvect[i].flags & FD_OCCUPIED ){
+		if( (s->v_openvect[i].flags & FD_OCCUPIED) && !(s->v_openvect[i].flags & FD_INVALID) ){
 			d->v_openvect[i].flags = s->v_openvect[i].flags;
 			d->v_openvect[i].file = file_get(s->v_openvect[i].file);
 		}
@@ -323,7 +323,8 @@ int path_lookup(const char* name, int flags, struct path* path)
 				return 0;
 			}
 			struct dentry* dentry = path->p_dentry;
-			path->p_dentry = d_lookup(path->p_dentry, iter); // there's no slash, so just lookup the next item
+			// there's no slash, so just lookup the next item
+			path->p_dentry = d_lookup(path->p_dentry, iter);
 			d_put(dentry);
 			if( IS_ERR(path->p_dentry) ){
 				mnt_put(path->p_mount);
@@ -573,6 +574,49 @@ int sys_mount(const char* source_name, const char* target_name, const char* file
 	return 0; 
 }
 
+int sys_unlink(const char* pathname)
+{
+	struct path path;
+	int result = 0;
+
+	// Look up the parent of this file
+	// This also makes sure the file exists
+	result = path_lookup(pathname, WP_DEFAULT, &path);
+	if( result < 0 ){
+		return result;
+	}
+
+	// WHAATTTT???
+	if( path.p_dentry->d_parent == NULL ){
+		path_put(&path);
+		return -EINVAL;
+	}
+
+	struct dentry* parent = path.p_dentry->d_parent;
+
+	// Do we have an inode?
+	if( parent->d_inode == NULL ){
+		path_put(&path);
+		return -EINVAL;
+	}
+
+	// Is this implemented?
+	if( parent->d_inode->i_ops->unlink == NULL ){
+		path_put(&path);
+		return -ENOSYS;
+	}
+
+	// unlink it!
+	result = parent->d_inode->i_ops->unlink(parent->d_inode, path.p_dentry);
+	if( result < 0 ){
+		path_put(&path);
+		return result;
+	}
+
+	path_put(&path);
+	return 0;
+}
+
 /*
  * function: sys_umount
  * parameters:
@@ -785,6 +829,33 @@ void sys_relfd( int fd )
 	current->t_vfs.v_openvect[fd].flags = 0;
 }
 
+int sys_dup2(int fd, int otherfd)
+{
+	if( !FD_VALID(fd) ){
+		return -EBADF;
+	}
+
+	if( otherfd == -1 ){
+		for(otherfd = 0; otherfd < TASK_MAX_OPEN_FILES; ++otherfd) {
+			if( !FD_VALID(otherfd) ) break;
+		}
+		if( otherfd == TASK_MAX_OPEN_FILES ) return -EMFILE;
+	} else if( otherfd >= TASK_MAX_OPEN_FILES || otherfd < 0 ){
+		return -EBADF;
+	}
+
+	if( FD_VALID(otherfd) ){
+		if( sys_close(otherfd) < 0 ){
+			return -EIO;
+		}
+	}
+
+	current->t_vfs.v_openvect[otherfd].flags = current->t_vfs.v_openvect[fd].flags;
+	current->t_vfs.v_openvect[otherfd].file = file_get(current->t_vfs.v_openvect[fd].file);
+
+	return otherfd;
+}
+
 int sys_open(const char* filename, int flags, mode_t mode)
 {
 	struct path path;
@@ -824,11 +895,13 @@ int sys_open(const char* filename, int flags, mode_t mode)
 				return result;
 			}
 		} else { // the file doesn't exist and we don't want to create it
+			current->t_vfs.v_openvect[fd].flags = 0;
 			return result;
 		}
 	// we want a new file, not an existing one
 	} else if( flags & O_EXCL ){
 		path_put(&path);
+		current->t_vfs.v_openvect[fd].flags = 0;
 		return -EEXIST;
 	}
 	

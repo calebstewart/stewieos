@@ -95,8 +95,10 @@ void e2_put_inode(struct superblock* sb ATTR((unused)), struct inode* inode)
 	e2_inode_private_t* priv = EXT2_INODE(inode);
 	
 	if( priv->inode->i_links_count == 0 ){
+		// Free the inode blocks if it's not longer linked to
 		e2_free_inode(sb, inode);
 	} else {
+		// If it has links left, sync any changes we've made.
 		e2_inode_flush(inode);
 	}
 	
@@ -1100,7 +1102,7 @@ int e2_inode_link(struct inode* parent, const char* name, struct inode* inode)
 	return 0;	
 }
 
-int e2_inode_unlink(struct inode* parent, const char* name)
+int e2_inode_unlink(struct inode* parent, struct dentry* entry)
 {
 	e2_inode_private_t* parent_priv = EXT2_INODE(parent);
 	e2_inode_private_t* child_priv = NULL;
@@ -1110,35 +1112,27 @@ int e2_inode_unlink(struct inode* parent, const char* name)
 	
 	// calculate number of fs blocks and length of the name
 	u32 nblocks = (parent_priv->inode->i_blocks*512)/parent->i_super->s_blocksize;
-	size_t name_len = strlen(name);
+	size_t name_len = strlen(entry->d_name);
 	
 	// search every dirent in every block for the given name
 	for( u32 b = 0; b < nblocks; ++b)
 	{
 		// read in the block
 		e2_read_block(parent->i_super, parent_priv->block[b], 1, parent_priv->rw);
-		e2_dirent_t* iter = (e2_dirent_t*)parent_priv->rw;
-		while( ((u32)iter) < ((u32)parent_priv->rw + parent->i_super->s_blocksize) )
+		for( e2_dirent_t* iter = (e2_dirent_t*)parent_priv->rw;
+			 (u32)iter < ((u32)parent_priv->rw + parent->i_super->s_blocksize);
+			 iter = (e2_dirent_t*)( (u32)iter + iter->rec_len) )
 		{
-			if( iter->inode == 0 ){
-				continue;
-			}
-			// If the lengths match and the names are the same
-			if( name_len == iter->name_len && strncmp(name, iter->name, name_len) == 0 )
+			if( iter->inode == 0 ) continue;
+			if( name_len != iter->name_len ) continue;
+			if( strncmp(entry->d_name, iter->name, name_len) == 0 )
 			{
-				// grab the inode
-				struct inode* child = i_get(parent->i_super, (ino_t)iter->inode);
-				if( !child ){
-					spin_unlock(&parent_priv->rw_lock);
-					return -ENOENT;
-				}
-				
 				// Reset the entry and rewrite it back to the drive
 				iter->inode = 0;
 				e2_write_block(parent->i_super, parent_priv->block[b], 1, parent_priv->rw);
 				
 				// lock the child
-				child_priv = EXT2_INODE(child);
+				child_priv = EXT2_INODE(entry->d_inode);
 				spin_lock(&child_priv->rw_lock);
 				
 				// decremeent reference count
@@ -1148,17 +1142,22 @@ int e2_inode_unlink(struct inode* parent, const char* name)
 				// unlock the child
 				spin_unlock(&child_priv->rw_lock);
 				
-				e2_inode_flush(child);
-				
-				// free our inode reference
-				i_put(child); // the inode probably gets freed here, unless it is open somewhere else
-				
+				// Flush the updated inode to disk
+				e2_inode_flush(entry->d_inode);
+
+				// Unlock the parent				
 				spin_unlock(&parent_priv->rw_lock);
 				
+				// Flush the parent
 				e2_inode_flush(parent);
 				
+				// At this point, the inode is unlinked, but it's blocks are
+				// still allocated (even if links_count is 0). It will be freed
+				// when all system references to it are released (e.g. at i_put).
 				return 0;
 			}
+			// Don't know why this would happen, but it does.
+			if( iter->rec_len == 0 ) break;
 		}
 	}
 	

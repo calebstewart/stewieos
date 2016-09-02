@@ -367,7 +367,7 @@ ssize_t e2_inode_io(struct inode* inode, int cmd, off_t offset, size_t size, cha
 int e2_inode_truncate(struct inode* inode);
 /* Middle-Level Inode Operations */
 int e2_inode_link(struct inode* parent, const char* name, struct inode* inode); // associate the given with the inode within the given parent directory
-int e2_inode_unlink(struct inode* inode, const char* name); // unlink the given name from within the given directory
+int e2_inode_unlink(struct inode* inode, struct dentry* name); // unlink the given name from within the given directory
 
 // Filesystem Operations Structures (defined in module.c)
 extern struct inode_operations e2_inode_operations;
