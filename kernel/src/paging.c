@@ -357,13 +357,19 @@ void page_fault(struct regs* regs)
 	asm volatile ("mov %%cr2,%0" : "=r"(address));
 	
 	int present = !(regs->err & 0x1);
-	int rw = regs->err & 0x2;
-	int us = regs->err & 0x4;
+	int ro = regs->err & 0x2;
+	int user = regs->err & 0x4;
 	int reserved = regs->err & 0x8;
+	pid_t pid = current ? current->t_pid : 0;
 	//int id = regs->err & 0x10;
+
+	syslog(KERN_ERR, "process[%d]: SEGFAULT: addr %p ip %p sp %p flags ( %s%s%s%s).",
+		pid, address, regs->eip, regs->esp, 
+		present ? "p " : "", ro ? "ro " : "rw", user ? "us ":"",
+		reserved ? "rsvd " : "");
 	
-	syslog(KERN_PANIC, "page_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
-	syslog(KERN_PANIC, "page_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
+	//syslog(KERN_PANIC, "page_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
+	//syslog(KERN_PANIC, "page_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
 	
 	/*
 	syslog(KERN_PANIC, "%2VPAGE FAULT ( %s%s%s%s)Address: 0x%x", present ? "present " : "", rw ? "read-only ":"", us?"user-mode ":"", reserved?"reserved ":"", address);
@@ -376,12 +382,16 @@ void page_fault(struct regs* regs)
 	syslog(KERN_PANIC, "%2VCR0: 0x%X", cr0);
 	syslog(KERN_PANIC, "%2VCR3: 0x%X", cr3);
 	syslog(KERN_PANIC, "%2VCS: 0x%XDS: 0x%X", regs->cs, regs->ds);*/
+
+	while( 1 );
 	
-	syslog(KERN_PANIC, "page_fault: killing task %d.", current->t_pid);
+	//syslog(KERN_PANIC, "page_fault: killing task %d.", current->t_pid);
 	sys_exit(-1);
+
+	syslog(KERN_PANIC, "process[%d]: unable to kill process. halting system...", pid);
 	
-	syslog(KERN_PANIC, "system: unable to kill task. entering infinite loop instead...");
-	while(1) asm volatile("hlt");
+	//syslog(KERN_PANIC, "system: unable to kill task. entering infinite loop instead...");
+	while(1) asm volatile("cli; hlt");
 }
 
 /*

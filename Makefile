@@ -6,6 +6,10 @@
 .PHONY: toolchain kernel userland all-confirm all
 .PHONY: binutils gcc newlib libstdc++ modules libgcc
 .PHONY: stewieos clean-all
+# These check to see if something is installed, and
+# install it if needed.
+.PHONY: binutils-installed gcc-installed
+.PHONY: newlib-installed
 
 BUILDDIR:=$(abspath ./toolchain/build)
 TOOLCHAIN:=$(abspath ./toolchain)
@@ -30,13 +34,11 @@ $(BUILDDIR)/gcc/Makefile:
 	cd  "$(BUILDDIR)/gcc"; \
 	 $(TOOLCHAIN)/gcc/configure --prefix="$(PREFIX)" --target="$(TARGET)" --with-sysroot="$(SYSROOT)" --enable-languages=c,c++
 
-gcc: $(BUILDDIR)/gcc/.build_success
-
-gcc: binutils $(BUILDDIR)/gcc/Makefile
+gcc: binutils-installed $(BUILDDIR)/gcc/Makefile
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-gcc
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-gcc
 
-libgcc: gcc newlib
+libgcc: gcc-installed newlib
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-target-libgcc
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-target-libgcc
 
@@ -44,7 +46,7 @@ $(BUILDDIR)/newlib/Makefile:
 	cd "$(BUILDDIR)/newlib"; \
 	$(TOOLCHAIN)/newlib/configure --prefix="$(PREFIX)" --target="$(TARGET)"
 
-newlib: gcc $(BUILDDIR)/newlib/Makefile
+newlib: gcc-installed $(BUILDDIR)/newlib/Makefile
 	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4
 	$(MAKE) -C "$(BUILDDIR)/newlib" -j 4 install
 #	cp -ar $(SYSROOT)/$(TARGET)/* $(SYSROOT)/usr/
@@ -52,6 +54,12 @@ newlib: gcc $(BUILDDIR)/newlib/Makefile
 libstdc++: newlib
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 all-target-libstdc++-v3
 	$(MAKE) -C "$(BUILDDIR)/gcc" -j 4 install-target-libstdc++-v3
+
+binutils-installed: $(PREFIX)/bin/$(TARGET)-ar
+	$(MAKE) binutils
+
+gcc-installed: $(PREFIX)/bin/$(TARGET)-gcc
+	$(MAKE) gcc
 
 clean-all:
 	$(MAKE) -C "userland" clean

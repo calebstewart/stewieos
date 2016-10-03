@@ -27,8 +27,16 @@ struct list
 
 #define list_is_last(item, head) ((item)->next == head)
 
+#define list_is_first(item, head) ( (head)->next == item )
+
 // is item the only item in the list contained at head?
 #define list_is_lonely(item, head) ((item)->next == head && (item)->prev == head)
+
+// If the item is initialized but not inserted, it will be the only item
+// in its own list (prev/next will point to self), so list_is_lonely on
+// itself will return true, which means it is not inserted, and we will
+// return false.
+#define list_inserted(item) !list_is_lonely(item,item)
 
 // Returns -1 for a < b, 0 for a == b, and 1 for a > b
 typedef int(*list_compare_func_t)(list_t*, list_t*);
@@ -46,11 +54,6 @@ static inline list_t* list_last(list_t* head)
 static inline int list_empty(list_t* list)
 {
 	return (list->next == list);
-}
-// is this inside of another list?
-static inline int list_inserted(list_t* list)
-{
-	return (list->next != list || list->prev != list);
 }
 
 static inline void _list_add(list_t* what, list_t* prev, list_t* next)

@@ -24,7 +24,7 @@ void heap_init(heap_t* heap, void* start, void* end)
 	INIT_LIST(&heap->holes);
 
 	// This will expand by the minimum amount (PAGE_SIZE, likely)
-	heap_expand(heap, 0x10000);
+	heap_expand(heap, 1);
 
 	// Make sure the global heap allocator is setup
 	kmalloc_int = kheap_alloc;
@@ -69,30 +69,41 @@ header_t* heap_expand(heap_t* heap, size_t ammnt)
 		ammnt = (size_t)heap->memmax - (size_t)heap->memstart;
 	}
 
-	// Allocate the required pages
-	for( void* p = heap->memend;
-		(size_t)p < ((size_t)heap->memend + ammnt);
-		p = (void*)((size_t)p + PAGE_SIZE))
-	{
-		alloc_frame(get_page(p, 0, kerndir), 0, 1);
-		invalidate_page(p);
+	// Allocate the amount memory we need, in pages (possible extra)
+	u32 npages = ammnt / PAGE_SIZE;
+
+	for(u32 p = 0; p < npages; ++p){
+		page_t* page = get_page((void*)((u32)heap->memend + p*PAGE_SIZE), 0, kerndir);
+		alloc_frame(page, 0, 1);
+		invalidate_page((void*)((u32)heap->memend + p*PAGE_SIZE));
 	}
+
+	// Allocate the required pages
+	// for( void* p = heap->memend;
+	// 	(size_t)p < ((size_t)heap->memend + ammnt);
+	// 	p = (void*)((size_t)p + PAGE_SIZE))
+	// {
+	// 	alloc_frame(get_page(p, 0, kerndir), 0, 1);
+	// 	invalidate_page(p);
+	// }
 
 	// The new header
 	header_t* head = (header_t*)heap->memend;
-	head->magic = KHEAP_MAGIC;
-	head->size = ammnt;
-	INIT_LIST(&head->link);
-	// The new footer
-	footer_t* foot = (footer_t*)((size_t)heap + ammnt - sizeof(footer_t));
-	foot->magic = KHEAP_MAGIC;
-	foot->header = head;
+	head_init(head, ammnt);
+	// head->magic = KHEAP_MAGIC;
+	// head->size = ammnt;
+	// INIT_LIST(&head->link);
+	// // The new footer
+	// //footer_t* foot = heap_foot(head); //(footer_t*)((size_t)heap + ammnt - sizeof(footer_t));
+	// heap_foot(head)->magic = KHEAP_MAGIC;
+	// heap_foot(head)->header = head;
 
 	// Adjust the end pointer
 	heap->memend = (void*)((size_t)heap->memend + ammnt);
 
 	// Insert the new memory into the hole list
-	heap_free_nolock(heap, (void*)((size_t)head + sizeof(header_t)));
+	//heap_add_hole(heap, head);
+	heap_free_nolock(heap, heap_addr(head));
 
 	return head;
 
@@ -113,10 +124,14 @@ header_t* heap_locate(heap_t* heap, size_t reqd, int align)
 		// Big enough?
 		if( head->size >= (reqd + KHEAP_OVHD) ){
 			// attempt to align/trim
-			head = heap_trim(heap, head, reqd, align);
+			header_t* temp = heap_trim(heap, head, reqd, align);
 			// unsuccessfull -> couldn't align, keep looking
-			if( head == NULL ) continue;
-			else return head;
+			if( temp == NULL ){
+				//item = &heap->holes;
+				continue;
+			} else {
+				return temp;
+			}
 		}
 	}
 
@@ -125,6 +140,9 @@ header_t* heap_locate(heap_t* heap, size_t reqd, int align)
 	if( head == NULL || head->size < (reqd + KHEAP_OVHD) ){
 		return NULL;
 	}
+
+	return heap_locate(heap, reqd, align);
+
 	// Attempt to trim
 	head = heap_trim(heap, head, reqd, align);
 	if( head == NULL ){
@@ -139,6 +157,8 @@ header_t* heap_locate(heap_t* heap, size_t reqd, int align)
 //		- `head` if asked to align and successfull.
 //		- possibly a new header if the block was split to align.
 //		- NULL on failure (unable to align block, not enough rooom)
+//			* On failure, the heap remains unchanged.
+//			* The hole list is untouched.
 header_t* heap_trim(heap_t* heap, header_t* head, size_t reqd, int align)
 {
 	// No space for a trim and no need to align
@@ -153,46 +173,62 @@ header_t* heap_trim(heap_t* heap, header_t* head, size_t reqd, int align)
 		if( ((size_t)temp - (size_t)head) <= KHEAP_OVHD ){
 			return NULL;
 		}
+		// Can't align, because not enough space after alignment.
+		if( (head->size - ((size_t)temp - (size_t)head)) < (reqd+KHEAP_OVHD) ){
+			return NULL;
+		}
 
 		// Initialize the aligned header
-		temp->size = head->size - ((size_t)temp - (size_t)head);
-		temp->magic = KHEAP_MAGIC;
-		heap_foot(temp)->magic = KHEAP_MAGIC;
-		heap_foot(temp)->header = temp;
+		head_init(temp, head->size-((size_t)temp - (size_t)head));
+		// temp->size = head->size - ((size_t)temp - (size_t)head);
+		// temp->magic = KHEAP_MAGIC;
+		// INIT_LIST(&temp->link);
+		// heap_foot(temp)->magic = KHEAP_MAGIC;
+		// heap_foot(temp)->header = temp;
 
 		// Resize and remove the header
-		head->size = ((size_t)temp - (size_t)head);
-		heap_foot(head)->magic = KHEAP_MAGIC;
-		heap_foot(head)->header = head;
 		list_rem(&head->link);
+		head_init(head, (size_t)temp - (size_t)head);
+		// head->size = ((size_t)temp - (size_t)head);
+		// heap_foot(head)->magic = KHEAP_MAGIC;
+		// heap_foot(head)->header = head;
+		// list_rem(&head->link);
 
 		// Reinsert the header and the temp header
 		heap_free_nolock(heap, heap_addr(head));
-		heap_free_nolock(heap, heap_addr(temp));
+		heap_add_hole(heap, temp);
+		// heap_free_nolock(heap, heap_addr(head));
+		// heap_free_nolock(heap, heap_addr(temp));
 
 		// The temp header is now aligned and is our primary
 		head = temp;
 	}
 
 	// Can't trim, not enough space.
-	if( (head->size-reqd-KHEAP_OVHD) <= KHEAP_OVHD ){
+	if( head->size < (reqd+KHEAP_OVHD+KHEAP_OVHD) ){
 		return head;
 	}
 
 	// Initialize the unused/trimmed block
 	header_t* temp = (header_t*)( (size_t)head + reqd + KHEAP_OVHD );
-	temp->magic = KHEAP_MAGIC;
-	temp->size = ( head->size - reqd - KHEAP_OVHD );
-	heap_foot(temp)->magic = KHEAP_MAGIC;
-	heap_foot(temp)->header = temp;
-
-	// Insert the trimmed block into the list
-	heap_free_nolock(heap, heap_addr(temp));
+	head_init(temp, head->size - reqd - KHEAP_OVHD);
+	// temp->magic = KHEAP_MAGIC;
+	// temp->size = ( head->size - reqd - KHEAP_OVHD );
+	// heap_foot(temp)->magic = KHEAP_MAGIC;
+	// heap_foot(temp)->header = temp;
 
 	// Trim the block
-	head->size = reqd + KHEAP_OVHD;
-	heap_foot(head)->magic = KHEAP_MAGIC;
-	heap_foot(head)->header = head;
+	list_rem(&head->link);
+	head_init(head, reqd + KHEAP_OVHD);
+	// head->size = reqd + KHEAP_OVHD;
+	// heap_foot(head)->magic = KHEAP_MAGIC;
+	// heap_foot(head)->header = head;
+
+	// Insert the trimmed block into the list
+	//heap_add_hole(heap, temp);
+	//heap_free_nolock(heap, heap_addr(head));
+	heap_free_nolock(heap, heap_addr(temp));
+	heap_add_hole(heap, head);
 
 	return head;
 }
@@ -223,8 +259,8 @@ void* heap_alloc(heap_t* heap, size_t reqd, int align)
 // free block list
 void heap_free_nolock(heap_t* heap, void* addr)
 {
-	list_t* item;
-	header_t* entry;
+//	list_t* item;
+//	header_t* entry;
 	header_t* head;
 
 	// Invalid address
@@ -234,6 +270,25 @@ void heap_free_nolock(heap_t* heap, void* addr)
 
 	// Find the header
 	head = heap_head(addr);
+
+	// Combine backwards
+	while( !heap_is_first(heap, head) && list_inserted(&head_prev(head)->link) )
+	{
+		//syslog(KERN_WARN, "merging backwards");
+		header_t* prev = head_prev(head);
+		list_rem(&prev->link);
+		head_init(prev, prev->size + head->size);
+		head = prev;
+	}
+
+	// Combine forwards
+	while( !heap_is_last(heap, head) && list_inserted(&head_next(head)->link) )
+	{
+		//syslog(KERN_WARN, "merging forwards");
+		header_t* next = head_next(head);
+		list_rem(&next->link);
+		head_init(head, head->size + next->size);
+	}
 
 	// Either not a block or you've corrupted it
 	if( head->magic != KHEAP_MAGIC ){
@@ -245,23 +300,27 @@ void heap_free_nolock(heap_t* heap, void* addr)
 	heap_foot(head)->header = head;
 	INIT_LIST(&head->link);
 
-	// Easy if the hole list is empty
-	if( list_empty(&heap->holes) ){
-		list_add(&head->link, &heap->holes);
-	} else {
-		// Add, sorted by block size
-		list_for_each_entry(item, &heap->holes, header_t, link, entry) 
-		{
-			if( entry->size >= head->size ){
-				list_add_before(&head->link, item);
-				break;
-			}
-			if( item->next == &heap->holes ){
-				list_add(&head->link, item);
-				break;
-			}
-		}
-	}
+	heap_add_hole(heap, head);
+
+	//list_add_ordered(&head->link, &heap->holes, heap_compare_headers);
+
+	// // Easy if the hole list is empty
+	// if( list_empty(&heap->holes) ){
+	// 	list_add(&head->link, &heap->holes);
+	// } else {
+	// 	// Add, sorted by block size
+	// 	list_for_each_entry(item, &heap->holes, header_t, link, entry) 
+	// 	{
+	// 		if( entry->size >= head->size ){
+	// 			list_add_before(&head->link, item);
+	// 			break;
+	// 		}
+	// 		if( item->next == &heap->holes ){
+	// 			list_add(&head->link, item);
+	// 			break;
+	// 		}
+	// 	}
+	// }
 
 }
 
@@ -274,4 +333,11 @@ void heap_free(heap_t* heap, void* addr)
 	// unlock the heap
 	spin_unlock(&heap->lock);
 
+}
+
+int heap_compare_headers(list_t* v1, list_t* v2)
+{
+	if( list_entry(v1, header_t, link)->size < list_entry(v2, header_t, link)->size ) return -1;
+	else if( list_entry(v1, header_t, link)->size == list_entry(v2, header_t, link)->size ) return 0;
+	else return 1;
 }
