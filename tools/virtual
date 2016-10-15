@@ -27,6 +27,8 @@ UL=`echo -e "\e[4m"`
 BLD=`echo -e "\e[1m"`
 # Default options for QEMU emulator
 QEMU_OPTIONS="-drive file="$IMAGE_NAME",format="$IMAGE_TYPE" -serial stdio -boot c"
+# The current user
+USER=`whoami`
 
 # Print a formatted information message
 function info
@@ -157,6 +159,17 @@ function image_cleanup
 	umount_image > /dev/null 2>/dev/null && unload_image > /dev/null 2>/dev/null
 }
 
+# Verify that the current user is root.
+# if they aren't, rerun the command with sudo and print a message
+function sudome
+{
+
+	info "running sudo for $2"
+	sudo $1 $2
+
+	return 0
+}
+
 # Print the help message for this script
 function print_help
 {
@@ -247,17 +260,35 @@ for arg; do
 			;;
 		# Create the image
 		create)
+			# Verify this was run as root, and rerun with sudo if necessary
+			if [ "$USER" != "root" ]; then
+				info "running sudo for $arg"
+				sudo $0 $arg
+				continue
+			fi
 			# Make sure that we cleanup before exit
 			trap image_cleanup EXIT
 			image_create
 			;;
 		# Synchronize the image with the sysroot directory
 		sync)
+			# Verify this was run as root, and rerun with sudo if necessary
+			if [ "$USER" != "root" ]; then
+				info "running sudo for $arg"
+				sudo $0 $arg
+				continue
+			fi
 			# Make sure that we cleanup before exit
 			trap image_cleanup EXIT
 			image_sync
 			;;
 		mount)
+			# Verify this was run as root, and rerun with sudo if necessary
+			if [ "$USER" != "root" ]; then
+				info "running sudo for $arg"
+				sudo $0 $arg
+				continue
+			fi
 			load_image
 			mount_image
 			if [ "$?" -ne "0" ]; then
@@ -269,6 +300,12 @@ for arg; do
 			fi
 			;;
 		umount)
+			# Verify this was run as root, and rerun with sudo if necessary
+			if [ "$USER" != "root" ]; then
+				info "running sudo for $arg"
+				sudo $0 $arg
+				continue
+			fi
 			umount_image && unload_image 
 			if [ "$?" -ne "0" ]; then
 				error "unable to unmount image!"

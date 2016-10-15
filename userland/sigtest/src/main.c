@@ -4,8 +4,8 @@
 void signal_handler(int sig)
 {
 	printf("CAUGHT SIGNAL: %s (%d)\n", strsignal(sig), sig);
-	signal_return();
-	while(1);
+	//signal_return();
+	//while(1);
 }
 
 int main(int argc, char** argv)

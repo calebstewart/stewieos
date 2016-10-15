@@ -28,7 +28,7 @@ For building and running StewieOS, there will be a few things you need to instal
 * Qemu (with `qemu-system-i386`)
 * A working build environment (e.g. `gcc`, `binutils`, etc.)
 * NASM - Netwide Assembler
-* The custom toolchain (have a few :beers: or :coffee: ready...)
+* The custom toolchain (have a few :beers: or :coffee: ready; it's a long build)
 
 If you are planning on modifying the toolchain, then you also need:
 
@@ -59,7 +59,7 @@ This is a simple script that sets up the environment to find the custom toolchai
 Getting Started
 ---------------
 
-In order to start working with StewieOS, you must build the toolchain. This is a long process, so I suggest a few :beers: or a glass of :coffee: on hand. It takes a significant amount of time, but should be rather painless. Simply run `make toolchain` in the root of the repository, and you should be on your way to building `binutils`, `gcc`, and `newlib`. It takes somewhere in the range of hours on my machine to build everything the first time (although, I've never sat to watch it), so good luck.
+In order to start working with StewieOS, you must build the toolchain. This is a long process, so I suggest a few :beers: or a glass of :coffee: on hand. It takes a significant amount of time, but should be rather painless. Simply run `make toolchain` in the root of the repository, and you should be on your way to building `binutils`, `gcc`, and `newlib`. It takes somewhere in the range of an hour on my machine to build everything the first time (although, I've never sat to watch it), so good luck.
 
 Once you have built the toolchain, you can run `make stewieos` to build the kernel, kernel modules, and user space applications. These will all be installed within the `sysroot` directory which is effectively the root of the StewieOS disk image. You may add files there to have them installed to the virtual image.
 

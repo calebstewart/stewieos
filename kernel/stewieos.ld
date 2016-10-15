@@ -17,6 +17,11 @@ SECTIONS
 		*(.init.data)
 	}
 
+	.physcopy.text . :
+	{
+		*(.physcopy.text)
+	}
+
 	. += KERNEL_VIRTUAL_BASE;
 
 	.text ALIGN(0x1000) : AT(ADDR(.text) - 0xC0000000)

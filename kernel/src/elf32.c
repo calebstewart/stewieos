@@ -125,7 +125,8 @@ int elf_load_exec(exec_t* exec)
 			if( (phdr[i].p_memsz - phdr[i].p_filesz) > 0  ) {
 				memset((void*)( phdr[i].p_vaddr + phdr[i].p_filesz ), 0, phdr[i].p_memsz - phdr[i].p_filesz);
 			}
-			elf_modify_range(phdr[i].p_vaddr & 0xfffff000, (phdr[i].p_vaddr+phdr[i].p_memsz)&0xfffff000, ( (phdr[i].p_flags & PF_R) != 0 ), ( (phdr[i].p_flags & PF_W) != 0 ));
+			elf_modify_range(phdr[i].p_vaddr & 0xfffff000, (phdr[i].p_vaddr+phdr[i].p_memsz)&0xfffff000,
+				( (phdr[i].p_flags & PF_R) != 0 ), ( (phdr[i].p_flags & PF_W) != 0 ));
 			// we need to tell the kernel where the end of the executable is for sbrk stuff
 			if( (u32)exec->bssend < (phdr[i].p_vaddr+phdr[i].p_memsz) ){
 				exec->bssend = (void*)(phdr[i].p_vaddr+phdr[i].p_memsz);

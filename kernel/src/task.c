@@ -216,10 +216,14 @@ void task_preempt(struct regs* regs ATTR((unused)))
 			continue;
 		} else if(current->t_flags & TF_EXIT)
 		{
-			struct task* dead = current;
-			current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
-			task_free(dead);
-			continue;
+			if( current->t_dir != curdir ){
+				struct task* dead = current;
+				current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
+				task_free(dead);
+				continue;
+			} else {
+				current = list_next(&current->t_queue, struct task, t_queue, &ready_tasks);
+			}
 		}
 		
 	}
@@ -245,6 +249,8 @@ void task_switch(struct task* task)
 	u32 esp;					// the old stack pointer
 	u32 ebp;					// the old base pointer
 	u32 eip;					// the old instruction pointer
+
+	disablei();
 
 	current = task;
 	eip = current->t_eip;
@@ -276,7 +282,7 @@ void task_switch(struct task* task)
 			pushl %4;\
 			popf;\
 			jmp *%0;"
-				: : "b"(eip),"c"(esp),"d"(ebp),"S"(curdir->phys), "D"(current->t_eflags));
+				: : "b"(eip),"c"(esp),"d"(ebp),"S"(curdir->phys), "D"(current->t_eflags) : "memory");
 }
 
 /* function: task_free
@@ -300,7 +306,7 @@ void task_free(struct task* dead)
 	
 	if( dead->t_pid == 0 )
 	{
-		//debug_message("warning: attempted to kill init task!", 0);
+		debug_message("warning: attempted to kill init task!", 0);
 		
 		// We need to return the init task to a stable running state
 		dead->t_flags = TF_RUNNING;
@@ -318,13 +324,10 @@ void task_free(struct task* dead)
 	
 	// remove the task from the running queue
 	list_rem(&dead->t_queue);
-	list_rem(&dead->t_sibling);
-	list_rem(&dead->t_globlink);
+	//list_rem(&dead->t_sibling);
+	//list_rem(&dead->t_globlink);
 	list_rem(&dead->t_ttywait);
 	dead->t_flags = TF_ZOMBIE;
-	
-	// free the tasks page directory
-	free_page_dir(dead->t_dir);
 	
 	while( !list_empty(&dead->t_children) ){
 		struct task* child = list_entry(list_first(&dead->t_children), struct task, t_sibling);
@@ -338,6 +341,12 @@ void task_free(struct task* dead)
 		list_rem(&cont->link);
 		kfree(cont);
 	}
+
+	// We should be freeing the page directory.
+	// There is a bug somewhere that causes a
+	// page fault if  I free the directory, though...
+	//syslog(KERN_PANIC, "we aren't freeing page directories... :(");
+	free_page_dir(dead->t_dir);
 	
 	// The task is not actually dead yet.
 	// It needs to notify the parent of it's death,
@@ -505,7 +514,7 @@ pid_t task_spawn(int kern)
 		// copy the page directory
 		task->t_dir = copy_page_dir(current->t_dir);
 	} else {
-		task->t_parent = NULL;
+		task->t_parent = current;
 		init_task_vfs(&task->t_vfs);
 		task->t_dir = copy_page_dir(current->t_dir);
 		strip_page_dir(task->t_dir);
@@ -554,8 +563,9 @@ pid_t task_spawn(int kern)
 		task_setfg(task->t_pid);
 	}
 	
+	schedule();
 	
-	restore(eflags);
+	//restore(eflags);
 	
 	return task->t_pid;
 }
@@ -591,7 +601,7 @@ int sys_fork( void )
 	
 	// setup the initial values for the new task
 	task->t_pid = next_pid++;
-	task->t_flags  = 0;
+	task->t_flags = 0;
 	task->t_esp = esp;
 	task->t_ebp = ebp;
 	task->t_parent = current;
@@ -603,9 +613,6 @@ int sys_fork( void )
 	INIT_LIST(&task->t_mesgq.queue);
 	INIT_LIST(&task->t_semlink);
 	spin_init(&task->t_mesgq.lock);
-	
-	copy_task_vfs(&task->t_vfs, &current->t_vfs);
-	signal_init(task);
 
 	// copy the page directory
 	task->t_dir = copy_page_dir(current->t_dir);
@@ -615,6 +622,9 @@ int sys_fork( void )
 		restore(eflags);
 		return -1;
 	}
+
+	copy_task_vfs(&task->t_vfs, &current->t_vfs);
+	signal_copy(task, current);
 	
 	// this is where the new task will start
 	u32 eip = read_eip();
@@ -625,31 +635,29 @@ int sys_fork( void )
 		return 0;
 	}
 	// this means we are the parent, and we need to setup the child
-	
-	task->t_eip = eip;
-	
-	// link the task into the list
-//	task->t_next = current->t_next;
-//	current->t_next = task;
-	
+		
 	// add the task just after the current task
 	list_add(&task->t_queue, &ready_tasks);
 	list_add(&task->t_sibling, &current->t_children);
 	list_add(&task->t_globlink, &task_globlist);
 	
+	// setup the instruction pointer and eflags
+	task->t_eip = eip;
 	task->t_eflags = eflags & ~0x100;
 	
 	// the task is ready to run
-	// and the parent will give up its timeslice
-	task->t_flags = TF_RUNNING;
-	//current->t_flags |= TF_RESCHED;
+	task->t_flags = current->t_flags;
 	
 	// This task is now the foreground
 	task_setfg(task->t_pid);
 	
+	// Restore eflags state
+	//restore(eflags);
+
+	// Reschedule
+	schedule();
 	
-	restore(eflags);
-	
+	// Return the process id of the new task
 	return task->t_pid;
 }
 
@@ -870,20 +878,7 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 		// This means that the task has not yet changed states
 		// store the pid that we are waiting on
 		current->t_waitfor = pid;
-		// Set the wait flag and reschedule flag
-		current->t_flags &= ~TF_RUNNING;
-		current->t_flags |= TF_WAITTASK;
-		// Remove ourself from the running queue
-		list_rem(&current->t_queue);
-		
-		u32 cr3 = 0;
-		asm volatile ("movl %%cr3,%0;" : "=r"(cr3));
-		
-		// reschedule the task system (we already set the reschedule flag for this task
-		// so it will pick a new one, and not return until TF_WAITTASK is unset).
-		schedule();
-		
-		asm volatile ("movl %%cr3,%0;" : "=r"(cr3));
+		task_wait(current, TF_WAITTASK);
 
 		// the task_free function for the other task will store
 		// its' pid and status information in our task structure
@@ -900,6 +895,7 @@ pid_t sys_waitpid(pid_t pid, int* status, int options)
 		list_rem(&task->t_sibling); // remove from the parent-child list
 	}
 	list_rem(&task->t_globlink); // remove from the global task list
+
 	// the tasks runtime data should have already been free'd, we just need
 	// to free the task structure and remove it from lists.
 	kfree(task);

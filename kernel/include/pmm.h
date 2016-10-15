@@ -4,6 +4,9 @@
 #include "kernel.h"
 #include "paging.h"
 
+#define FRAME_TO_ADDR(frame) ((frame) << 12)
+#define ADDR_TO_FRAME(addr) ((addr) >> 12)
+
 u32 find_free_frame( void );					// Find the next free frame in memory
 void reserve_frame(u32 frame);					// Reserve a frame in memory
 void release_frame(u32 frame);					// Release a previously reserved frame

@@ -4,10 +4,13 @@
 #include "kernel.h"
 #include "descriptor_tables.h"
 #include "multiboot.h"
+#include "spinlock.h"
 
 #define PAGE_SIZE (0x1000)
 #define PAGE_ALIGN(addr) ( (addr) & 0xFFFFF000 )
 #define PAGE_OFFSET(addr) ( (addr) & 0x00000FFF )
+#define PAGE_TABLE(addr) ( ((addr) >> 22) & 0x3ff )
+#define PAGE_PAGE(addr) ( ((addr) >> 12) & 0x3ff )
 #define PAGE_ALIGNED(addr) (PAGE_OFFSET(addr) == 0)
 
 #define VADDR(t, p, o)	(((0x3ff & t) << 22) | ((0x3ff & p) << 12) | (o & 0xfff))
@@ -34,6 +37,7 @@ typedef struct page_dir
 	page_table_t* table[1024];
 	
 	u32 phys;
+	spinlock_t lock;
 } page_dir_t;
 
 // Variables that may be needed by other source files
@@ -154,7 +158,7 @@ int get_physical_addr(page_dir_t* dir, void* virt, u32* phys);
  * \return none.
  * \note This is implemented in paging_asm.s
  */
-void copy_physical_frame(u32 dest, u32 srce);
+void copy_physical_frame(u32 dest, u32 src) ATTR((cdecl));
 
 /*! \brief Temporarily map a page from one directory into another
  * 

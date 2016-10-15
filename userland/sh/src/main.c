@@ -138,6 +138,8 @@ int main(int argc, char** argv, char** envp)
 		shell(stdout, file, envp);
 		return 0;
 	}
+
+	printf("started shell as %d\n", getpid());
 	
 	shell(stdout, stdin, envp);
 	

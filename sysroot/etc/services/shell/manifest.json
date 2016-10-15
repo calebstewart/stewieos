@@ -2,6 +2,8 @@
 	// This will be used as the name of the
 	// script or binary to execute
 	"binary": "/bin/sh",
+	// Specify to restart if the process dies
+	"autorestart": true,
 	// Actions which this service accepts
 	// These will be sent to the service via
 	// the script named above.

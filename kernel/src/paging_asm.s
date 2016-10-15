@@ -1,28 +1,35 @@
 [global copy_physical_frame:function]
+[section .physcopy.text]
 
-copy_physical_frame:		; void copy_physical_frame(u32*parm1,u32*parm2)
-	mov eax,256		; u32 counter = 256;
-	mov esi,[esp]		; u32* src = parm2;
-	mov edi,[esp+4]		; u32* dst = parm1;
-	; no good C explanation: save eflags, disable interrupts and paging
-	pushf
-	cli
+copy_physical_frame:		; void copy_physical_frame(u32 dest, u32 src) ATTR((cdecl));
+	mov eax,0			; initialize counter
+	mov esi,[esp+8]	; source pointer in esi
+	mov edi,[esp+4]		; destination pointer in edi
+	pushf				; save flags to restore interrupt state
+	cli					; turn off interrupts
+	; turn off paging
 	mov ecx,cr0
 	and ecx,0x7fffffff
 	mov cr0,ecx
-.loop0:				; while( 1 ) {
-	mov ecx,dword [esi]	; 	*dst = *src;
-	mov dword[edi],ecx	;
-	add edi,4		; 	dst = dst + 4;
-	add esi,4		; 	src = src + 4;
-	dec eax			; 	--counter;
-	cmp eax,0		; 	if(counter==0) break;
-	je .loop0		; 	else continue;
-.done:				; }
-	; Enable interrupts and restore eflags->and interrupt state
+
+; Loop through all 256 DWORDS in the page
+.loop0:
+	; Copy source to ecx
+	mov ecx,dword [esi+eax*4]
+	; Copy ecx to destination
+	mov dword[edi+eax*4],ecx
+	; Increment index
+	inc eax
+	; compare index to 1024
+	cmp eax,0x400
+	; if index is less than 1024, continue copying
+	jl .loop0
+
+; After we copy 1024 dwords...
+.done:
+	; turn on paging
 	mov ecx,cr0
-	and ecx,0x80000000
+	or ecx,0x80000000
 	mov cr0,ecx
-	popf
-	
-	ret			; return;
+	popf				; restore flags (reverses our cli)
+	ret

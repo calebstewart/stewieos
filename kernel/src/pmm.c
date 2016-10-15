@@ -1,3 +1,4 @@
+
 #include "pmm.h"
 
 u32* physical_frame = NULL;
@@ -39,7 +40,7 @@ u32 find_free_frame( void )
 		for(u32 m = 0; m < 32; m++){
 			if( i == 0 && m == 0 ) continue;
 			if( !(physical_frame[i] & (u32)(1<<m)) ){
-				return i*4*8 + m;
+				return i*32 + m;
 			}
 		}
 	}
@@ -48,13 +49,13 @@ u32 find_free_frame( void )
 
 void reserve_frame(u32 idx)
 {
-	idx /= 0x1000; // get a frame index instead of a frame address
+	//idx /= 0x1000; // get a frame index instead of a frame address
 	physical_frame[(int)(idx/32)] |= (u32)(1 << (idx % 32));
 }
 
 void release_frame(u32 idx)
 {
-	idx /= 0x1000; // get a frame index instead of a frame address
+	//idx /= 0x1000; // get a frame index instead of a frame address
 	physical_frame[(int)(idx/32)] &= (u32)(~(1 << (idx % 32)));
 }
 
@@ -63,6 +64,7 @@ void alloc_frame(page_t* page, int user, int rw)
 	//printk("PHYSICAL_ADDRESS: %p\n", physical_frame);
 	if( page->present != 0 ){
 		printk("%1Vwarning: attempting to map to an address already in use!\n");
+		asm volatile ("cli; hlt");
 		while(1);
 		return;
 	}
@@ -71,9 +73,10 @@ void alloc_frame(page_t* page, int user, int rw)
 	u32 idx = find_free_frame();
 	if( idx == (u32)-1 ){
 		printk("%2VOUT OF MEMORY!\n");
+		asm volatile ("cli; hlt");
 		while(1);
 	}
-	reserve_frame(idx*0x1000);
+	reserve_frame(idx);
 	page->present = 1;
 	page->user = user ? 1 : 0;
 	page->rw = rw ? 1 : 0;
@@ -92,7 +95,7 @@ void clone_frame(page_t* dst, page_t* src)
 
 void free_frame(page_t* page) 
 {
-	if( !page->present ) return;
+	if( !page->present || page->frame == 0 ) return;
 	
 	release_frame(page->frame);
 	page->frame = 0;

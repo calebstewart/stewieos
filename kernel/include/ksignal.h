@@ -26,6 +26,7 @@ typedef struct _signal_state
 } signal_state_t;
 
 void signal_init(struct task* task);
+void signal_copy(struct task* src, struct task* dst);
 int signal_kill(struct task* task, int signal);
 void signal_save(struct task* task);
 int signal_check(struct task* task);

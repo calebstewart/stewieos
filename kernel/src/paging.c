@@ -75,7 +75,7 @@ void init_paging( multiboot_info_t* mb )
 		if( mmap->type != 1 ) continue;
 		multiboot_uint64_t frame = (u32)mmap->addr;
 		while( frame < (mmap->addr + mmap->len) ){
-			release_frame((u32)frame);
+			release_frame(ADDR_TO_FRAME((u32)frame));
 			frame += 0x1000;
 		}
 	}
@@ -92,17 +92,13 @@ void init_paging( multiboot_info_t* mb )
 		get_page((void*)a, 1, kerndir);
 	}
 	
-// 	for(u32 a = 0xF0000000; a >= 0xF0000000; a += 0x1000){
-// 		get_page((void*)a, 1, kerndir);
-// 	}
-	
 	u32 i = KERNEL_VIRTUAL_BASE;
 	while( i < placement_address )
 	{
 		// identity map as well as higher half map
 		page_t* page_hi = get_page((void*)i, 1, kerndir);
 		page_t* page_low = get_page((void*)(i-KERNEL_VIRTUAL_BASE), 1, kerndir);
-		reserve_frame(i-KERNEL_VIRTUAL_BASE);
+		reserve_frame(ADDR_TO_FRAME(i-KERNEL_VIRTUAL_BASE));
 		page_hi->present = 1;
 		page_hi->user = 1;
 		page_hi->rw = 0;
@@ -118,27 +114,27 @@ void init_paging( multiboot_info_t* mb )
 	// }
 	
 	register_interrupt(0xE, page_fault);
-	
+	 
 	//switch_page_dir(curdir);
 	
 	initial_switch_dir((void*)curdir->phys);
 	
-	for( u32 a = 0x00100000; a < KERNEL_VIRTUAL_BASE; a += 0x1000){
-		u32 dir_idx = (a >> 22) & 0x3FF;
+// 	for( u32 a = 0x00100000; a < KERNEL_VIRTUAL_BASE; a += 0x1000){
+// 		u32 dir_idx = (a >> 22) & 0x3FF;
 		
-		if( !kerndir->table[dir_idx] ) continue;
+// 		if( !kerndir->table[dir_idx] ) continue;
 		
-		for(u32 p = 0; p < 1024; ++p){
-			free_frame(&kerndir->table[dir_idx]->page[p]);
-		}
-		kerndir->table[dir_idx] = NULL;
-		kerndir->tablePhys[dir_idx] = 0;
+// 		for(u32 p = 0; p < 1024; ++p){
+// 			free_frame(&kerndir->table[dir_idx]->page[p]);
+// 		}
+// 		kerndir->table[dir_idx] = NULL;
+// 		kerndir->tablePhys[dir_idx] = 0;
 		
-// 		page_t* page = get_page((void*)a, 0, kerndir);
-// 		if( !page ) continue;
-// 		page->present = 0;
-// 		page->frame = 0;
-	}
+// // 		page_t* page = get_page((void*)a, 0, kerndir);
+// // 		if( !page ) continue;
+// // 		page->present = 0;
+// // 		page->frame = 0;
+// 	}
 
 	heap_init(&kernel_heap, (void*)0xD0000000, (void*)0xF0000000);
 	
@@ -334,11 +330,11 @@ void invalidate_page(u32* ptr)
 void switch_page_dir(page_dir_t* dir)
 {
 	curdir = dir;
-	asm volatile("mov %0,%%cr3" :: "r"(curdir->phys));
-	//u32 cr0;
-	//asm volatile("mov %%cr0,%0" :"=r"(cr0));
-	//cr0 |= 0x80000000;
-	//asm volatile("mov %0,%%cr0" ::"r"(cr0));
+	asm volatile("mov %0,%%cr3" :: "r"(curdir->phys) : "memory");
+	u32 cr0;
+	asm volatile("mov %%cr0,%0" :"=r"(cr0));
+	cr0 |= 0x80000000;
+	asm volatile("mov %0,%%cr0" ::"r"(cr0) : "memory");
 }
 
 /* function: page_fault
@@ -356,17 +352,25 @@ void page_fault(struct regs* regs)
 	u32 address = 0;
 	asm volatile ("mov %%cr2,%0" : "=r"(address));
 	
-	int present = !(regs->err & 0x1);
+	int present = regs->err & 0x1;
 	int ro = regs->err & 0x2;
 	int user = regs->err & 0x4;
 	int reserved = regs->err & 0x8;
 	pid_t pid = current ? current->t_pid : 0;
 	//int id = regs->err & 0x10;
 
-	syslog(KERN_ERR, "process[%d]: SEGFAULT: addr %p ip %p sp %p flags ( %s%s%s%s).",
+	if( !present && kerndir->table[PAGE_TABLE(address)] != NULL && curdir->table[PAGE_TABLE(address)] != NULL ){
+		curdir->table[PAGE_TABLE(address)] = kerndir->table[PAGE_TABLE(address)];
+		return;
+	}
+
+	syslog(KERN_ERR, "process[%d]: SEGFAULT: addr %p ip %p sp %p flags (%s%s on %s in %s).",
 		pid, address, regs->eip, regs->esp, 
-		present ? "p " : "", ro ? "ro " : "rw", user ? "us ":"",
-		reserved ? "rsvd " : "");
+		present ? "protected" : "not-present",
+		reserved ? " and reserved" : "",
+		ro ? "read" : "write",
+		user ? "user-mode" : "supervisor-mode"
+	);
 	
 	//syslog(KERN_PANIC, "page_fault: process %d caused a page fault at address 0x%x", current->t_pid, address);
 	//syslog(KERN_PANIC, "page_fault: page fault data: instr 0x%x, flags ( %s%s%s%s).", regs->eip, present ? "p " : "", rw ? "ro ":"rw ", us?"us ":"", reserved?"rsvd ":"");
@@ -383,15 +387,18 @@ void page_fault(struct regs* regs)
 	syslog(KERN_PANIC, "%2VCR3: 0x%X", cr3);
 	syslog(KERN_PANIC, "%2VCS: 0x%XDS: 0x%X", regs->cs, regs->ds);*/
 
+	display_page_dir(current->t_dir);
+	display_page_dir(current->t_parent->t_dir);
+
 	while( 1 );
 	
 	//syslog(KERN_PANIC, "page_fault: killing task %d.", current->t_pid);
 	sys_exit(-1);
 
-	syslog(KERN_PANIC, "process[%d]: unable to kill process. halting system...", pid);
+	syslog(KERN_PANIC, "process[%d]: unable to kill process. halting process...", pid);
 	
 	//syslog(KERN_PANIC, "system: unable to kill task. entering infinite loop instead...");
-	while(1) asm volatile("cli; hlt");
+	while(1) asm volatile("hlt");
 }
 
 /*
@@ -419,10 +426,11 @@ int copy_page_table(page_dir_t* dstdir, page_dir_t* srcdir, int t)
 			return -1;
 		}
 		dstdir->tablePhys[t] = phys | 0x7;
+		memset(dstdir->table[t], 0, sizeof(page_table_t));
 	}
 	
 	// this is to copy the physical frame
-	void* temp_buffer = kmalloc(0x1000);
+	//void* temp_buffer = kmalloc(0x1000);
 	
 	// Copy every page 
 	for(int p = 0; p < 1024; ++p)
@@ -438,19 +446,16 @@ int copy_page_table(page_dir_t* dstdir, page_dir_t* srcdir, int t)
 		// Allocate a new frame, and use the same security settings
 		// as the old frame
 		alloc_frame(dst, src->user, src->rw);
-		dst->accessed = src->accessed ? 1 : 0;
-		dst->dirty = src->dirty ? 1 : 0;
-		dst->unused = src->unused;
-		// copy the actual data
-		void* temp_map_ptr = temporary_map(((u32)t << 22)|((u32)p<<12), srcdir);
-		memcpy(temp_buffer, temp_map_ptr, 0x1000);
-		temp_map_ptr = temporary_map(((u32)t<<22)|((u32)p<<12), dstdir);
-		memcpy(temp_map_ptr, temp_buffer, 0x1000);
-		temporary_unmap();
-		//copy_physical_frame((u32)(dst->frame << 12), (u32)(src->frame << 12));
+		// // copy the actual data
+		// void* temp_map_ptr = temporary_map(((u32)t << 22)|((u32)p<<12), srcdir);
+		// memcpy(temp_buffer, temp_map_ptr, 0x1000);
+		// temp_map_ptr = temporary_map(((u32)t<<22)|((u32)p<<12), dstdir);
+		// memcpy(temp_map_ptr, temp_buffer, 0x1000);
+		// temporary_unmap();
+		copy_physical_frame((u32)(dst->frame << 12), (u32)(src->frame << 12));
 	}
 	// free the frame
-	kfree(temp_buffer);
+	//kfree(temp_buffer);
 	
 	return 0;
 }
@@ -483,6 +488,11 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 	// memset(dst, 0, 0x1000);
 	memset(dst, 0, sizeof(page_dir_t));
 	dst->phys = tmp;
+
+	u32 flags = disablei();
+
+	spin_lock(&src->lock);
+	spin_lock(&dst->lock);
 	
 	for(int t = 0; t < 1024; ++t)
 	{
@@ -495,10 +505,17 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 		} else {
 			if( copy_page_table(dst, src, t) != 0 ){
 				syslog(KERN_ERR, "copy_page_dir: unable to copy page table!\n");
+				spin_unlock(&src->lock);
+				spin_unlock(&dst->lock);
+				restore(flags);
 				return NULL;
 			}
 		}
 	}
+
+	spin_unlock(&src->lock);
+	spin_unlock(&dst->lock);
+	restore(flags);
 	
 	return dst;
 }
@@ -506,6 +523,9 @@ page_dir_t* copy_page_dir(page_dir_t* src)
 int strip_page_dir(page_dir_t* dir)
 {
 	int erase_table = 0;
+
+	spin_lock(&dir->lock);
+
 	for(unsigned int t = 0; t < 1024; ++t)
 	{
 		if( !dir->table[t] || dir->table[t] == kerndir->table[t] ) continue;
@@ -525,8 +545,13 @@ int strip_page_dir(page_dir_t* dir)
 		}
 		if( erase_table ){
 			kfree(dir->table[t]);
+			dir->table[t] = NULL;
+			dir->tablePhys[t] = 0;
 		}
 	}
+
+	spin_unlock(&dir->lock);
+
 	return 0;
 }
 
@@ -535,17 +560,23 @@ void free_page_dir(page_dir_t* dir)
 	if( dir == curdir ){
 		return;
 	}
+
+	spin_lock(&dir->lock);
 	
 	for(int t = 0; t < 1024; ++t)
 	{
-		if( !dir->table[t] || dir->table[t] == kerndir->table[t] ) continue;
+		if( !dir->table[t] || kerndir->table[t] ) continue;
 		for(int p = 0; p < 1024; ++p)
 		{
-			free_frame(&dir->table[t]->page[p]);
+			if( dir->table[t]->page[p].present )
+				free_frame(&dir->table[t]->page[p]);
 		}
 		kfree(dir->table[t]);
+		dir->table[t] = NULL;
+		dir->tablePhys[t] = 0;
 	}
 	
+	memset(dir, 0, sizeof(page_dir_t));
 	kfree(dir);
 }
 
@@ -557,7 +588,7 @@ void display_page_dir(page_dir_t* dir)
 	u32 start_frame = 0;
 	u32 length = 0;
 	
-	syslog(KERN_NOTIFY, "Page Directory Mappings (dir=0x%X)\n", dir);
+	syslog(KERN_NOTIFY, "Page Directory Mappings (dir=0x%X)", dir);
 	while( addr < 0xFFFFFFFF )
 	{
 		page_t* page = get_page((void*)addr, 0, dir);
@@ -569,7 +600,7 @@ void display_page_dir(page_dir_t* dir)
 				start_frame = page->frame;
 				length = 1;
 			} else {
-				syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
+				syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
 				start_addr = addr;
 				start_frame = page->frame;
 				length = 1;
@@ -578,6 +609,6 @@ void display_page_dir(page_dir_t* dir)
 		if( addr == ((u32)(-0x1000)) ) break;
 		addr += 0x1000;
 	}
-	syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X\n", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
+	syslog(KERN_NOTIFY, "0x%08X-0x%08X -> 0x%08X-0x%08X", start_frame*0x1000, (start_frame+length)*0x1000, start_addr, start_addr+length*0x1000);
 	
 }

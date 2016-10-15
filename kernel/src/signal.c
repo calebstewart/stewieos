@@ -2,7 +2,7 @@
 * @Author: Caleb Stewart
 * @Date:   2016-07-18 00:23:11
 * @Last Modified by:   Caleb Stewart
-* @Last Modified time: 2016-07-23 19:59:19
+* @Last Modified time: 2016-10-15 13:40:15
 */
 #include <task.h>
 #include "error.h"
@@ -39,6 +39,11 @@ void signal_init(struct task* task)
 		task->t_signal.handler[i] = SIG_DFL;
 	}
 	task->t_signal.nraised = 0;
+}
+
+void signal_copy(struct task* dst, struct task* src)
+{
+	memcpy(&dst->t_signal, &dst->t_signal, sizeof(src->t_signal));
 }
 
 void signal_save(struct task* task)
@@ -90,7 +95,7 @@ int signal_check(struct task* task)
 		return 0;
 	}
 
-	syslog(KERN_WARN, "dispatching signal for process %d", task->t_pid);
+	//syslog(KERN_WARN, "dispatching signal for process %d", task->t_pid);
 
 	// Setup the task to return to the signal
 	// handler
@@ -119,7 +124,7 @@ int signal_check(struct task* task)
 // void user_return_func( void ) __attribute__((noreturn));
 void signal_set_return(struct task* task, void* userfunc)
 {
-	syslog(KERN_WARN, "setting signal return pointer.");
+	//syslog(KERN_WARN, "setting signal return pointer.");
 	task->t_signal.handler_return = userfunc;
 }
 
@@ -153,7 +158,7 @@ int signal_kill(struct task* task, int sig)
 		return -EINVAL;
 	}
 
-	syslog(KERN_WARN, "raising signal for process %d.", task->t_pid);
+	//syslog(KERN_WARN, "raising signal for process %d.", task->t_pid);
 	RAISE_SIGNAL(task, sig);
 
 	// Reschedule if the task is not already in a signal handler
@@ -184,7 +189,7 @@ sighandler_t signal_signal(struct task* task, int sig, sighandler_t handler)
 
 	task->t_signal.handler[sig] = handler;
 
-	syslog(KERN_WARN, "setting signal %d to %p", sig, handler);
+	//syslog(KERN_WARN, "setting signal %d to %p", sig, handler);
 
 	return old;
 }

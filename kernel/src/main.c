@@ -174,7 +174,7 @@ int kmain( multiboot_info_t* mb )
 	
 	enablei();
 	while(1){
-		asm volatile("hlt");
+		//asm volatile("hlt");
 	}
 	
 	return (int)0xdeadbeef;
