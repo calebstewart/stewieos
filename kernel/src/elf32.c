@@ -1,14 +1,14 @@
-#include "kernel.h"
+#include "stewieos/kernel.h"
 #include "elf/elf32.h"
-#include "exec.h"
+#include "stewieos/exec.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "error.h"
-#include "kmem.h"
-#include "multiboot.h"
-#include "dentry.h"
-#include "paging.h"
+#include "stewieos/error.h"
+#include "stewieos/kmem.h"
+#include "stewieos/multiboot.h"
+#include "stewieos/dentry.h"
+#include "stewieos/paging.h"
 
 // The kernel section header and accompanying information
 Elf32_Word g_shdr_num = 0;

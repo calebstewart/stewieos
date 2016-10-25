@@ -1,8 +1,8 @@
 #ifndef _VTTY_H_
 #define _VTTY_H_
 
-#include "tty.h"
-#include "exec.h"
+#include <stewieos/tty.h>
+#include <stewieos/exec.h>
 
 // Definitions
 #define VTTY_NAME "vtty"

@@ -1,4 +1,4 @@
-#include "kernel.h"
+#include "stewieos/kernel.h"
 
 // Write a byte out to the specified port.
 void outb(unsigned short port, unsigned char value)

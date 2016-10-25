@@ -1,7 +1,7 @@
-#include "testfs.h"
-#include "linkedlist.h"
-#include "kmem.h"
-#include "kernel.h"
+#include "stewieos/testfs.h"
+#include "stewieos/linkedlist.h"
+#include "stewieos/kmem.h"
+#include "stewieos/kernel.h"
 #include <errno.h>
 
 int testfs_read_super(struct filesystem* fs, struct superblock* super, dev_t device, unsigned long flags, void*);

@@ -1,9 +1,9 @@
-#include "event.h"
-#include "spinlock.h"
-#include "error.h"
-#include "kmem.h"
-#include "task.h"
-#include "sem.h"
+#include "stewieos/event.h"
+#include "stewieos/spinlock.h"
+#include "stewieos/error.h"
+#include "stewieos/kmem.h"
+#include "stewieos/task.h"
+#include "stewieos/sem.h"
 
 //static spinlock_t event_lock = 0;
 static list_t event_handlers = LIST_INIT(event_handlers);

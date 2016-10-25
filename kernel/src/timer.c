@@ -1,7 +1,7 @@
-#include "kernel.h"
-#include "timer.h"
-#include "descriptor_tables.h"
-#include "cmos.h"
+#include "stewieos/kernel.h"
+#include "stewieos/timer.h"
+#include "stewieos/descriptor_tables.h"
+#include "stewieos/cmos.h"
 
 struct callback_info;
 struct callback_info

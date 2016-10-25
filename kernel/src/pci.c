@@ -1,5 +1,5 @@
-#include "pci.h"
-#include "kmem.h"
+#include "stewieos/pci.h"
+#include "stewieos/kmem.h"
 
 // Bus table
 pci_bus_t* g_pci_bus[255];

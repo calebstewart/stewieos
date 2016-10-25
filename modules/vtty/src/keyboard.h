@@ -1,10 +1,10 @@
 #ifndef _VTTY_KEYBOARD_H_
 #define _VTTY_KEYBOARD_H_
 
-#include <kernel.h>
-#include <exec.h>
-#include <tty.h>
-#include <keys.h>
+#include <stewieos/kernel.h>
+#include <stewieos/exec.h>
+#include <stewieos/tty.h>
+#include <stewieos/keys.h>
 
 #define PS2_STATUS 0x64
 #define PS2_DATA 0x60

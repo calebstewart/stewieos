@@ -1,7 +1,7 @@
-#include "tty.h"
-#include "chrdev.h"
-#include "error.h"
-#include "dentry.h"
+#include "stewieos/tty.h"
+#include "stewieos/chrdev.h"
+#include "stewieos/error.h"
+#include "stewieos/dentry.h"
 #include <termios.h>
 #include <ctype.h>
 

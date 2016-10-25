@@ -1,11 +1,11 @@
-#include "fs.h"			// Basic filesystem definitions
-#include "dentry.h"		// directory entry structure and function definitions
+#include "stewieos/fs.h"			// Basic filesystem definitions
+#include "stewieos/dentry.h"		// directory entry structure and function definitions
 #include "sys/mount.h"		// sys_mount/umount flags and the like
-#include "error.h"		// Error constants
-#include "kmem.h"		// kmalloc/kfree
-#include "testfs.h"
-#include "task.h"
-#include "kernel.h"
+#include "stewieos/error.h"		// Error constants
+#include "stewieos/kmem.h"		// kmalloc/kfree
+#include "stewieos/testfs.h"
+#include "stewieos/task.h"
+#include "stewieos/kernel.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>

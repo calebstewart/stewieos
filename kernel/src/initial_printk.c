@@ -1,8 +1,8 @@
-#include "kernel.h"
-#include "timer.h"
-#include "serial.h"
-#include "fs.h"
-#include "error.h"
+#include "stewieos/kernel.h"
+#include "stewieos/timer.h"
+#include "stewieos/serial.h"
+#include "stewieos/fs.h"
+#include "stewieos/error.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 

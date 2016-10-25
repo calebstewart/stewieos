@@ -1,15 +1,15 @@
-#include "kernel.h"
-#include "exec.h"
-#include "fs.h"
+#include "stewieos/kernel.h"
+#include "stewieos/exec.h"
+#include "stewieos/fs.h"
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "error.h"
-#include "kmem.h"
+#include "stewieos/error.h"
+#include "stewieos/kmem.h"
 #include "unistd.h"
 #include "elf/elf32.h"
-#include "paging.h"
-#include "task.h"
-#include "ksignal.h"
+#include "stewieos/paging.h"
+#include "stewieos/task.h"
+#include "stewieos/ksignal.h"
 
 exec_type_t* g_exec_type = NULL;
 list_t g_module_list = LIST_INIT(g_module_list);

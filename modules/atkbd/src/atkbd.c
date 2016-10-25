@@ -1,8 +1,8 @@
-#include "kernel.h"
+#include <stewieos/kernel.h>
 #include "atkbd.h"
-#include <error.h>
-#include <ps2.h>
-#include <event.h>
+#include <stewieos/error.h>
+#include <stewieos/ps2.h>
+#include <stewieos/event.h>
 
 static u8 atkbd_state = 0;
 static u32 atkbd_multibyte = 0;

@@ -1,4 +1,4 @@
-#include "serial.h"
+#include "stewieos/serial.h"
 
 static serial_device_t serial_device[SERIAL_NMINORS] = {
 	{

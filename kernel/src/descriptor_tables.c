@@ -1,6 +1,6 @@
-//#include "kernel.h"
-#include "descriptor_tables.h"
-#include "task.h"
+//#include "stewieos/kernel.h"
+#include "stewieos/descriptor_tables.h"
+#include "stewieos/task.h"
 #include "syscall.h"
 
 // Function Prototypes

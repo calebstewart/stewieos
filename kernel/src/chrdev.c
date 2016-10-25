@@ -1,6 +1,6 @@
-#include "chrdev.h"
-#include "error.h"
-#include "kmem.h"
+#include "stewieos/chrdev.h"
+#include "stewieos/error.h"
+#include "stewieos/kmem.h"
 
 static chrdev_t* chrdev[256];
 

@@ -1,5 +1,5 @@
-#include "cmos.h"
-#include "error.h"
+#include "stewieos/cmos.h"
+#include "stewieos/error.h"
 
 static int g_nmi_state = 1;
 unsigned int mon_to_days[13] = {

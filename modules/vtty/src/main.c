@@ -1,7 +1,7 @@
-#include "exec.h" // For the module definitions
-#include "kernel.h" // For printk
-#include "fs.h" // For chrdev
-#include "error.h" // For error values E*
+#include <stewieos/exec.h> // For the module definitions
+#include <stewieos/kernel.h> // For printk
+#include <stewieos/fs.h> // For chrdev
+#include <stewieos/error.h> // For error values E*
 #include <fcntl.h>
 // These need to be created. They should each handle the monitor and keyboard respectfully!
 // monitor.h should provide:

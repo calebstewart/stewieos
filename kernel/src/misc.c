@@ -1,4 +1,4 @@
-#include "kernel.h"
+#include "stewieos/kernel.h"
 
 void* memset(void* ptr, int v, size_t count)
 {

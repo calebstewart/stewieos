@@ -1,11 +1,11 @@
-#include "exec.h" // For the module definitions
-#include "kernel.h" // For printk
-#include "pci.h"
-#include "error.h"
-#include "ata.h"
-#include "timer.h"
-#include "fs.h"
-#include "block.h"
+#include "stewieos/exec.h" // For the module definitions
+#include "stewieos/kernel.h" // For printk
+#include "stewieos/pci.h"
+#include "stewieos/error.h"
+#include "stewieos/ata.h"
+#include "stewieos/timer.h"
+#include "stewieos/fs.h"
+#include "stewieos/block.h"
 
 int ide_block_open(struct block_device* device, dev_t devid);
 int ide_block_close(struct block_device* device, dev_t devid);

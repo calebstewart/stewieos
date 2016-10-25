@@ -1,6 +1,6 @@
-#include "sem.h"
-#include "task.h"
-#include "linkedlist.h"
+#include "stewieos/sem.h"
+#include "stewieos/task.h"
+#include "stewieos/linkedlist.h"
 
 /* Allocate a new semaphore object */
 sem_t* sem_alloc(int max_units)

@@ -1,4 +1,4 @@
-#include "kernel.h"
+#include "stewieos/kernel.h"
 #include "acpi/acpi.h"
 
 shutdown_handler_t shutdown_handler[256] = {0};

@@ -1,7 +1,7 @@
-#include "pipe.h"
-#include "fs.h"
-#include "dentry.h"
-#include "error.h"
+#include "stewieos/pipe.h"
+#include "stewieos/fs.h"
+#include "stewieos/dentry.h"
+#include "stewieos/error.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 

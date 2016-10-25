@@ -1,14 +1,14 @@
-#include "kernel.h"
-#include "task.h"
+#include "stewieos/kernel.h"
+#include "stewieos/task.h"
 #include "syslog.h"
-#include "fs.h"
-#include "error.h"
-#include "spinlock.h"
+#include "stewieos/fs.h"
+#include "stewieos/error.h"
+#include "stewieos/spinlock.h"
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include "pipe.h"
-#include "exec.h"
+#include "stewieos/pipe.h"
+#include "stewieos/exec.h"
 
 static const char* syslog_level[SYSLOG_LEVEL_COUNT] = {
 	[KERN_NOTIFY] = "KERN_NOTIFY",

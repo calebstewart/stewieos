@@ -1,8 +1,8 @@
-#include "dentry.h"		/* dentry declerations */
-#include "fs.h"			/* filesystem declerations */
-#include "kmem.h"		/* kmalloc/kfree declerations */
-#include "kernel.h"		/* basic kernel definitions */
-#include "error.h"
+#include "stewieos/dentry.h"		/* dentry declerations */
+#include "stewieos/fs.h"			/* filesystem declerations */
+#include "stewieos/kmem.h"		/* kmalloc/kfree declerations */
+#include "stewieos/kernel.h"		/* basic kernel definitions */
+#include "stewieos/error.h"
 
 /*
  * function: d_free

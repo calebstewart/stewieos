@@ -1,8 +1,8 @@
 #ifndef _VTTY_MONITOR_H_
 #define _VTTY_MONITOR_H_
 
-#include <exec.h>
-#include <kernel.h>
+#include <stewieos/exec.h>
+#include <stewieos/kernel.h>
 
 int monitor_init(module_t* module);
 int monitor_quit(module_t* module);

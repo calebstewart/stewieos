@@ -1,8 +1,8 @@
-#include "exec.h" // For the module definitions
-#include "kernel.h" // For printk
+#include <stewieos/exec.h> // For the module definitions
+#include <stewieos/kernel.h> // For printk
 #include "atkbd.h" // AT Keyboard Definitions
-#include "ps2.h"
-#include <error.h>
+#include <stewieos/ps2.h>
+#include <stewieos/error.h>
 
 // Forward Declarations
 int keyboard_load(module_t* module);

@@ -1,11 +1,11 @@
-#include "fs.h"
-#include "kernel.h"
-#include "kmem.h"
-#include "multiboot.h"
+#include "stewieos/fs.h"
+#include "stewieos/kernel.h"
+#include "stewieos/kmem.h"
+#include "stewieos/multiboot.h"
 #include "sys/mount.h"
 #include <sys/fcntl.h>
-#include "error.h"
-#include "dentry.h"
+#include "stewieos/error.h"
+#include "stewieos/dentry.h"
 
 // inode operations
 int initfs_inode_lookup(struct inode* inode, struct dentry* dentry);

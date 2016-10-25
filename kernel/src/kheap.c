@@ -1,6 +1,6 @@
-#include "kheap.h"
-#include "paging.h" 
-#include "pmm.h"
+#include "stewieos/kheap.h"
+#include "stewieos/paging.h" 
+#include "stewieos/pmm.h"
 
 // The global kernel heap
 heap_t kernel_heap;

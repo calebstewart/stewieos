@@ -1,7 +1,7 @@
-#include "task.h"
-#include "spinlock.h"
-#include "linkedlist.h"
-#include "error.h"
+#include "stewieos/task.h"
+#include "stewieos/spinlock.h"
+#include "stewieos/linkedlist.h"
+#include "stewieos/error.h"
 
 int sys_message_send(pid_t pid, unsigned int type, const char* what, size_t length)
 {

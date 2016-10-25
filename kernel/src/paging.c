@@ -1,9 +1,9 @@
-#include "paging.h"
-#include "kmem.h"
-#include "pmm.h"
+#include "stewieos/paging.h"
+#include "stewieos/kmem.h"
+#include "stewieos/pmm.h"
 #include "elf/elf32.h"
-#include "task.h"
-#include "error.h"
+#include "stewieos/task.h"
+#include "stewieos/error.h"
 
 page_dir_t* kerndir = NULL;
 page_dir_t* curdir = NULL;

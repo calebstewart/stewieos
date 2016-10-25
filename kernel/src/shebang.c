@@ -1,9 +1,9 @@
-#include "shebang.h"
-#include "fs.h"
-#include "kmem.h"
+#include "stewieos/shebang.h"
+#include "stewieos/fs.h"
+#include "stewieos/kmem.h"
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "error.h"
+#include "stewieos/error.h"
 #include "unistd.h"
 
 exec_type_t shebang_script_type = {

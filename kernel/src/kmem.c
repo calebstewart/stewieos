@@ -1,8 +1,8 @@
-#include "kmem.h"
-#include "linkedlist.h"
-#include "pmm.h"
-#include "paging.h"
-#include "spinlock.h"
+#include "stewieos/kmem.h"
+#include "stewieos/linkedlist.h"
+#include "stewieos/pmm.h"
+#include "stewieos/paging.h"
+#include "stewieos/spinlock.h"
 
 // /* struct heap_data
 //  * purpose: encapsulates the data overhead needed by the kernel heap

@@ -1,11 +1,11 @@
-#include "kernel.h"
-#include "block.h"
-#include "fs.h"
-#include "dentry.h"
-#include "kmem.h"
+#include "stewieos/kernel.h"
+#include "stewieos/block.h"
+#include "stewieos/fs.h"
+#include "stewieos/dentry.h"
+#include "stewieos/kmem.h"
 #include "sys/types.h"
 #include <errno.h>
-#include "spinlock.h"
+#include "stewieos/spinlock.h"
 
 typedef struct {
 	char*  block;

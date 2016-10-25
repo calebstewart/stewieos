@@ -1,10 +1,10 @@
 #include "keyboard.h"
-#include "descriptor_tables.h"
-#include <error.h>
-#include <timer.h>
+#include <stewieos/descriptor_tables.h>
+#include <stewieos/error.h>
+#include <stewieos/timer.h>
 #include "vtty.h"
-#include <ps2.h>
-#include <event.h>
+#include <stewieos/ps2.h>
+#include <stewieos/event.h>
 
 int kbd_listen(event_t* event, void* data);
 

@@ -5,8 +5,8 @@
 * @Last Modified time: 2016-10-15 14:08:29
 */
 #include <task.h>
-#include "error.h"
-#include "ksignal.h"
+#include "stewieos/error.h"
+#include "stewieos/ksignal.h"
 
 void signal_default_term(struct task* task, int sig);
 void signal_default_core(struct task* task, int sig);

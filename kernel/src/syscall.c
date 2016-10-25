@@ -4,7 +4,7 @@
 #include <exec.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "error.h"
+#include "stewieos/error.h"
 #include <dirent.h>
 
 DECL_SYSCALL(syscall_exit);
